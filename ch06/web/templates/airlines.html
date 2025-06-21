@@ -1,0 +1,26 @@
+{% extends "layout.html" %}
+{% block body %}
+<!-- Navigation guide -->
+/ <a href="/airlines">Airlines</a> / <a href="/airlines/{{carrier_code}}">{{carrier_code}}</a>
+
+<!-- Summary -->
+<p class="lead">Airline {{ carrier_code }}</p>
+
+<h4>Fleet: {{airline_airplanes.FleetCount}} Planes</h4>
+<ul class="nav nav-pills">
+  {% for tail_number in airline_airplanes.TailNumbers -%}
+  <li class="button">
+    <a href="/airplane/{{tail_number}}">{{tail_number}}</a>
+  </li>
+  {% endfor -%}
+</ul>
+
+<h4>Airports: {{airline_airports.length}}</h4>
+<ul class="nav nav-pills">
+  {% for airport_code in airline_airports.Airports -%}
+  <li class="button">
+    <a href="/airport/{{airport_code}}">{{airport_code}}</a>
+  </li>
+  {% endfor -%}
+</ul>
+{% endblock %}
