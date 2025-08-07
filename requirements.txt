@@ -951,3 +951,14 @@ wtforms==2.3.3 \
 zipp==3.6.0; python_version < "3.8" and python_version >= "3.6" \
     --hash=sha256:9fe5ea21568a0a70e50f273397638d39b03353731e6cbbb3fd8502a33fec40bc \
     --hash=sha256:71c644c5369f4a6e07636f0aa966270449561fcea2e3d6747b8d23efaa9d7832
+
+python-dateutil~=2.9.0.post0
+pyspark~=3.0.3
+pyspark-stubs~=3.0.0.post3
+numpy~=2.3.1
+matplotlib~=3.10.3
+requests~=2.32.4
+beautifulsoup4~=4.13.4
+kagglehub~=0.3.12
+pandas~=2.3.1
+seaborn~=0.13.2

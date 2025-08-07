@@ -28,6 +28,8 @@ MONGO_COLLECTION = "flight_delay_classification_response"
 
 def main(base_path):
 
+    print("✅ Script iniciado 1")
+
     spark = (
         SparkSession.builder.config("spark.default.parallelism", 1)
         .config(
@@ -36,6 +38,7 @@ def main(base_path):
         .appName(APP_NAME)
         .getOrCreate()
     )
+    print("✅ Script iniciado 2")
 
     #
     # Load all models to be used in making predictions
