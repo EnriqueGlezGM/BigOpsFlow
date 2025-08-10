@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Predict Delivery Time</title>
+</head>
+<body>
+  <h1>Formulario de Predicción</h1>
+  <form action="/mydata/predict" method="post">
+    Order ID: <input type="number" name="order_id" value="1"><br>
+    Customer ID: <input type="text" name="customer_id" value="cust_123"><br>
+    Restaurant ID: <input type="text" name="restaurant_id" value="rest_456"><br>
+    Order Date and Time: <input type="datetime-local" name="order_date_and_time" value="2025-08-06T13:00"><br>
+    Delivery Date and Time: <input type="datetime-local" name="delivery_date_and_time" value="2025-08-06T13:45"><br>
+    Order Value: <input type="number" name="order_value" value="1000"><br>
+    Delivery Fee: <input type="number" name="delivery_fee" value="100"><br>
+    Payment Method: <input type="text" name="payment_method" value="credit_card"><br>
+    Discounts and Offers: <input type="text" name="discounts_and_offers" value="10% off"><br>
+    Commission Fee: <input type="number" name="commission_fee" value="100"><br>
+    Payment Processing Fee: <input type="number" name="payment_processing_fee" value="20"><br>
+    Refunds/Chargebacks: <input type="number" name="refunds/chargebacks" value="0"><br>
+    <input type="submit" value="Enviar">
+  </form>
+</body>
+</html>
