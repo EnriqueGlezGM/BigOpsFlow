@@ -1,4 +1,3 @@
-version: "3.7"
 services:
 
     agile:
@@ -28,8 +27,7 @@ services:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
-            pip install kafka-python pymongo
-            bash -c "/scripts/start-spark-cluster.sh && start-notebook.sh"
+            bash -c "pip install kafka-python pymongo && /scripts/start-spark-cluster.sh && start-notebook.sh"
         networks:
             - agile_net
 
@@ -119,6 +117,20 @@ services:
             - agile_net
         volumes:
             - /var/run/docker.sock:/var/run/docker.sock
+    
+    kibana:
+        container_name: kibana
+        hostname: kibana
+        image: docker.elastic.co/kibana/kibana:7.14.2
+        restart: always
+        environment:
+            ELASTICSEARCH_HOSTS: "http://elastic:9200"
+        ports:
+            - "5601:5601"
+        depends_on:
+            - elastic
+        networks:
+            - agile_net
 
 volumes:
     elastic_data:
@@ -128,7 +140,3 @@ networks:
     agile_net:
         name: agile_net
         driver: bridge
-    
-    # airflow_net:
-    #     name: airflow_net
-    #     driver: bridge
