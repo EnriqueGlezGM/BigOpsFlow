@@ -28,6 +28,7 @@ services:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
+            pip install kafka-python pymongo
             bash -c "/scripts/start-spark-cluster.sh && start-notebook.sh"
         networks:
             - agile_net
@@ -118,57 +119,6 @@ services:
             - agile_net
         volumes:
             - /var/run/docker.sock:/var/run/docker.sock
-
-    # postgres:
-    #     image: postgres
-    #     environment:
-    #         - POSTGRES_USER=airflow
-    #         - POSTGRES_PASSWORD=airflow
-    #         - POSTGRES_DB=airflow
-    #     networks:
-    #         - airflow_net
-
-    # scheduler:
-    #     container_name: scheduler
-    #     hostname: scheduler
-    #     labels:
-    #         description: Agile Data Science 2.0 Airflow 1.10.15 Scheduler
-    #         name: scheduler
-    #     image: apache/airflow:1.10.15
-    #     command: init && scheduler
-    #     restart: on-failure
-    #     depends_on:
-    #         - postgres
-    #     env_file:
-    #         - airflow.env
-    #     volumes:
-    #         - ./dags:/opt/airflow/dags
-    #         - ./logs:/opt/airflow/logs
-    #     networks:
-    #         - airflow_net
-
-    # webserver:
-    #     container_name: webserver
-    #     hostname: webserver
-    #     labels:
-    #         description: Agile Data Science 2.0 Airflow 1.10.15 Webserver
-    #         name: webserver
-    #     image: apache/airflow:1.10.15
-    #     command: webserver
-    #     restart: on-failure
-    #     depends_on:
-    #         - postgres
-    #         - scheduler
-    #     env_file:
-    #         - airflow.env
-    #     volumes:
-    #         - ./dags:/opt/airflow/dags
-    #         - ./logs:/opt/airflow/logs
-    #         - ./scripts:/opt/airflow/scripts
-    #     ports:
-    #         - "8080:8080"
-    #     networks:
-    #         - airflow_net
 
 volumes:
     elastic_data:

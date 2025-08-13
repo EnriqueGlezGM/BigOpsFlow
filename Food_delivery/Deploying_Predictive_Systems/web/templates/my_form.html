@@ -2,23 +2,64 @@
 <html>
 <head>
   <title>Predict Delivery Time</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
-  <h1>Formulario de Predicción</h1>
-  <form action="/mydata/predict" method="post">
-    Order ID: <input type="number" name="order_id" value="1"><br>
-    Customer ID: <input type="text" name="customer_id" value="cust_123"><br>
-    Restaurant ID: <input type="text" name="restaurant_id" value="rest_456"><br>
-    Order Date and Time: <input type="datetime-local" name="order_date_and_time" value="2025-08-06T13:00"><br>
-    Delivery Date and Time: <input type="datetime-local" name="delivery_date_and_time" value="2025-08-06T13:45"><br>
-    Order Value: <input type="number" name="order_value" value="1000"><br>
-    Delivery Fee: <input type="number" name="delivery_fee" value="100"><br>
-    Payment Method: <input type="text" name="payment_method" value="credit_card"><br>
-    Discounts and Offers: <input type="text" name="discounts_and_offers" value="10% off"><br>
-    Commission Fee: <input type="number" name="commission_fee" value="100"><br>
-    Payment Processing Fee: <input type="number" name="payment_processing_fee" value="20"><br>
-    Refunds/Chargebacks: <input type="number" name="refunds/chargebacks" value="0"><br>
-    <input type="submit" value="Enviar">
-  </form>
+  <div class="container my-5">
+    <div class="card shadow-sm p-4 bg-light">
+      <h1 class="mb-4">Formulario de Predicción</h1>
+      <form action="/mydata/predict" method="post">
+        <div class="mb-3">
+          <label for="order_id" class="form-label">Order ID</label>
+          <input type="number" class="form-control" id="order_id" name="order_id" value="1">
+        </div>
+        <div class="mb-3">
+          <label for="customer_id" class="form-label">Customer ID</label>
+          <input type="text" class="form-control" id="customer_id" name="customer_id" value="cust_123">
+        </div>
+        <div class="mb-3">
+          <label for="restaurant_id" class="form-label">Restaurant ID</label>
+          <input type="text" class="form-control" id="restaurant_id" name="restaurant_id" value="rest_456">
+        </div>
+        <div class="mb-3">
+          <label for="order_date_and_time" class="form-label">Order Date and Time</label>
+          <input type="datetime-local" class="form-control" id="order_date_and_time" name="order_date_and_time" value="2025-08-06T13:00">
+        </div>
+        <div class="mb-3">
+          <label for="delivery_date_and_time" class="form-label">Delivery Date and Time</label>
+          <input type="datetime-local" class="form-control" id="delivery_date_and_time" name="delivery_date_and_time" value="2025-08-06T13:45">
+        </div>
+        <div class="mb-3">
+          <label for="order_value" class="form-label">Order Value</label>
+          <input type="number" class="form-control" id="order_value" name="order_value" value="1000">
+        </div>
+        <div class="mb-3">
+          <label for="delivery_fee" class="form-label">Delivery Fee</label>
+          <input type="number" class="form-control" id="delivery_fee" name="delivery_fee" value="100">
+        </div>
+        <div class="mb-3">
+          <label for="payment_method" class="form-label">Payment Method</label>
+          <input type="text" class="form-control" id="payment_method" name="payment_method" value="credit_card">
+        </div>
+        <div class="mb-3">
+          <label for="discounts_and_offers" class="form-label">Discounts and Offers</label>
+          <input type="text" class="form-control" id="discounts_and_offers" name="discounts_and_offers" value="10% off">
+        </div>
+        <div class="mb-3">
+          <label for="commission_fee" class="form-label">Commission Fee</label>
+          <input type="number" class="form-control" id="commission_fee" name="commission_fee" value="100">
+        </div>
+        <div class="mb-3">
+          <label for="payment_processing_fee" class="form-label">Payment Processing Fee</label>
+          <input type="number" class="form-control" id="payment_processing_fee" name="payment_processing_fee" value="20">
+        </div>
+        <div class="mb-3">
+          <label for="refunds_chargebacks" class="form-label">Refunds/Chargebacks</label>
+          <input type="number" class="form-control" id="refunds_chargebacks" name="refunds/chargebacks" value="0">
+        </div>
+        <button type="submit" class="btn btn-primary">Enviar</button>
+      </form>
+    </div>
+  </div>
 </body>
 </html>
