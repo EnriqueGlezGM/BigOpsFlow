@@ -1,65 +1,257 @@
 <!DOCTYPE html>
-<html>
+<html lang="es" data-bs-theme="light">
 <head>
-  <title>Predict Delivery Time</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Predicción de entrega</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    .spin { display: none; }
+    #resultCard { display: none; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: .9rem; }
+  </style>
 </head>
-<body>
-  <div class="container my-5">
-    <div class="card shadow-sm p-4 bg-light">
-      <h1 class="mb-4">Formulario de Predicción</h1>
-      <form action="/mydata/predict" method="post">
-        <div class="mb-3">
-          <label for="order_id" class="form-label">Order ID</label>
-          <input type="number" class="form-control" id="order_id" name="order_id" value="1">
-        </div>
-        <div class="mb-3">
-          <label for="customer_id" class="form-label">Customer ID</label>
-          <input type="text" class="form-control" id="customer_id" name="customer_id" value="cust_123">
-        </div>
-        <div class="mb-3">
-          <label for="restaurant_id" class="form-label">Restaurant ID</label>
-          <input type="text" class="form-control" id="restaurant_id" name="restaurant_id" value="rest_456">
-        </div>
-        <div class="mb-3">
-          <label for="order_date_and_time" class="form-label">Order Date and Time</label>
-          <input type="datetime-local" class="form-control" id="order_date_and_time" name="order_date_and_time" value="2025-08-06T13:00">
-        </div>
-        <div class="mb-3">
-          <label for="delivery_date_and_time" class="form-label">Delivery Date and Time</label>
-          <input type="datetime-local" class="form-control" id="delivery_date_and_time" name="delivery_date_and_time" value="2025-08-06T13:45">
-        </div>
-        <div class="mb-3">
-          <label for="order_value" class="form-label">Order Value</label>
-          <input type="number" class="form-control" id="order_value" name="order_value" value="1000">
-        </div>
-        <div class="mb-3">
-          <label for="delivery_fee" class="form-label">Delivery Fee</label>
-          <input type="number" class="form-control" id="delivery_fee" name="delivery_fee" value="100">
-        </div>
-        <div class="mb-3">
-          <label for="payment_method" class="form-label">Payment Method</label>
-          <input type="text" class="form-control" id="payment_method" name="payment_method" value="credit_card">
-        </div>
-        <div class="mb-3">
-          <label for="discounts_and_offers" class="form-label">Discounts and Offers</label>
-          <input type="text" class="form-control" id="discounts_and_offers" name="discounts_and_offers" value="10% off">
-        </div>
-        <div class="mb-3">
-          <label for="commission_fee" class="form-label">Commission Fee</label>
-          <input type="number" class="form-control" id="commission_fee" name="commission_fee" value="100">
-        </div>
-        <div class="mb-3">
-          <label for="payment_processing_fee" class="form-label">Payment Processing Fee</label>
-          <input type="number" class="form-control" id="payment_processing_fee" name="payment_processing_fee" value="20">
-        </div>
-        <div class="mb-3">
-          <label for="refunds_chargebacks" class="form-label">Refunds/Chargebacks</label>
-          <input type="number" class="form-control" id="refunds_chargebacks" name="refunds/chargebacks" value="0">
-        </div>
-        <button type="submit" class="btn btn-primary">Enviar</button>
-      </form>
+<body class="bg-body-tertiary">
+  <nav class="navbar navbar-expand-lg bg-body border-bottom sticky-top">
+    <div class="container">
+      <a class="navbar-brand fw-semibold" href="#">🍔 MyData · Realtime Predict</a>
+      <div class="form-check form-switch ms-auto">
+        <input class="form-check-input" type="checkbox" id="themeToggle">
+        <label class="form-check-label" for="themeToggle">Dark</label>
+      </div>
     </div>
-  </div>
+  </nav>
+
+  <main class="container my-5">
+    <div class="row g-4">
+      <!-- Formulario -->
+      <div class="col-12 col-lg-7">
+        <div class="card shadow-sm">
+          <div class="card-body p-4">
+            <h1 class="h4 mb-3">Formulario de Predicción</h1>
+            <p class="text-secondary mb-4">Rellena los campos y lanzaremos una predicción en streaming. Tras enviarlo, esta página hará <em>polling</em> hasta recibir el resultado.</p>
+
+            <div id="alertHost"></div>
+
+            <form id="predictForm" novalidate>
+              <div class="row g-3">
+                <div class="col-12 col-md-6">
+                  <label for="order_id" class="form-label">Order ID</label>
+                  <input type="number" class="form-control" id="order_id" value="1" min="1" step="1" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="customer_id" class="form-label">Customer ID</label>
+                  <input type="text" class="form-control" id="customer_id" value="cust_123" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="restaurant_id" class="form-label">Restaurant ID</label>
+                  <input type="text" class="form-control" id="restaurant_id" value="rest_456" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="order_date_and_time" class="form-label">Order Date and Time</label>
+                  <input type="datetime-local" class="form-control" id="order_date_and_time" value="2025-08-06T13:00" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="delivery_date_and_time" class="form-label">Delivery Date and Time</label>
+                  <input type="datetime-local" class="form-control" id="delivery_date_and_time" value="2025-08-06T13:45" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="order_value" class="form-label">Order Value</label>
+                  <input type="number" class="form-control" id="order_value" value="1000" min="0" step="0.01" inputmode="decimal" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="delivery_fee" class="form-label">Delivery Fee</label>
+                  <input type="number" class="form-control" id="delivery_fee" value="100" min="0" step="0.01" inputmode="decimal" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="payment_method" class="form-label">Payment Method</label>
+                  <input type="text" class="form-control" id="payment_method" value="credit_card" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="discounts_and_offers" class="form-label">Discounts and Offers</label>
+                  <input type="text" class="form-control" id="discounts_and_offers" value="10% off">
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="commission_fee" class="form-label">Commission Fee</label>
+                  <input type="number" class="form-control" id="commission_fee" value="100" min="0" step="0.01" inputmode="decimal" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="payment_processing_fee" class="form-label">Payment Processing Fee</label>
+                  <input type="number" class="form-control" id="payment_processing_fee" value="20" min="0" step="0.01" inputmode="decimal" required>
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label for="refunds_chargebacks" class="form-label">Refunds/Chargebacks</label>
+                  <input type="number" class="form-control" id="refunds_chargebacks" value="0" min="0" step="0.01" inputmode="decimal" required>
+                </div>
+              </div>
+
+              <div class="d-flex align-items-center gap-3 mt-4">
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                  <span class="spinner-border spinner-border-sm me-2 spin" role="status" aria-hidden="true"></span>
+                  Enviar
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="resetBtn">Reset</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Resultado -->
+      <div class="col-12 col-lg-5">
+        <div id="resultCard" class="card shadow-sm">
+          <div class="card-body p-4">
+            <h2 class="h5 mb-3">Resultado</h2>
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="badge text-bg-info" id="statusBadge">esperando…</span>
+              <div class="spinner-border spinner-border-sm spin" id="pollSpinner" role="status" aria-hidden="true"></div>
+            </div>
+            <div class="code small mb-2" id="uuidLine"></div>
+            <div class="display-6 fw-semibold" id="predictionLine" style="line-height:1.2"></div>
+            <hr class="my-3" />
+            <details>
+              <summary class="mb-2">Ver documento crudo</summary>
+              <pre class="code mb-0" id="rawDoc">{}</pre>
+            </details>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    // ---- Theme toggle (light/dark) ----
+    const themeToggle = document.getElementById('themeToggle');
+    const htmlEl = document.documentElement;
+    themeToggle?.addEventListener('change', () => {
+      htmlEl.setAttribute('data-bs-theme', themeToggle.checked ? 'dark' : 'light');
+    });
+
+    const form = document.getElementById('predictForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const resultCard = document.getElementById('resultCard');
+    const alertHost = document.getElementById('alertHost');
+    const pollSpinner = document.getElementById('pollSpinner');
+    const uuidLine = document.getElementById('uuidLine');
+    const statusBadge = document.getElementById('statusBadge');
+    const predictionLine = document.getElementById('predictionLine');
+    const rawDoc = document.getElementById('rawDoc');
+    const spinEls = document.querySelectorAll('.spin');
+
+    function setSpinning(on) {
+      spinEls.forEach(el => el.style.display = on ? 'inline-block' : 'none');
+      submitBtn.disabled = on;
+    }
+
+    function showAlert(kind, msg) {
+      alertHost.innerHTML = `
+        <div class="alert alert-${kind} alert-dismissible fade show" role="alert">
+          ${msg}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>`;
+    }
+
+    function toRFC3339Local(dtValue) {
+      // value from datetime-local is already in local "YYYY-MM-DDTHH:mm"
+      return dtValue ? dtValue + ':00' : null; // add seconds
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setSpinning(true);
+      alertHost.innerHTML = '';
+      resultCard.style.display = 'block';
+      statusBadge.className = 'badge text-bg-info';
+      statusBadge.textContent = 'enviado';
+      pollSpinner.style.display = 'inline-block';
+      predictionLine.textContent = '';
+      rawDoc.textContent = '{}';
+
+      // Construimos el JSON exactamente como espera Spark (nombres y tipos)
+      const payload = {
+        order_id: Number(document.getElementById('order_id').value),
+        customer_id: document.getElementById('customer_id').value,
+        restaurant_id: document.getElementById('restaurant_id').value,
+        order_date_and_time: toRFC3339Local(document.getElementById('order_date_and_time').value),
+        delivery_date_and_time: toRFC3339Local(document.getElementById('delivery_date_and_time').value),
+        order_value: Number(document.getElementById('order_value').value),
+        delivery_fee: Number(document.getElementById('delivery_fee').value),
+        payment_method: document.getElementById('payment_method').value,
+        discounts_and_offers: document.getElementById('discounts_and_offers').value,
+        commission_fee: Number(document.getElementById('commission_fee').value),
+        payment_processing_fee: Number(document.getElementById('payment_processing_fee').value),
+        // OJO: la clave en JSON debe llevar la barra: "refunds/chargebacks"
+        ["refunds/chargebacks"]: Number(document.getElementById('refunds_chargebacks').value)
+      };
+
+      try {
+        const res = await fetch('/mydata/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Error HTTP ' + res.status);
+        const data = await res.json(); // { id: <uuid>, status: "submitted" }
+        const uuid = data.id;
+        uuidLine.textContent = 'UUID: ' + uuid;
+        statusBadge.textContent = 'procesando…';
+
+        // Polling al backend (que a su vez mira Mongo) hasta 30s
+        const started = Date.now();
+        const timeoutMs = 30000;
+        let done = false;
+
+        while (!done) {
+          if (Date.now() - started > timeoutMs) {
+            statusBadge.className = 'badge text-bg-warning';
+            statusBadge.textContent = 'timeout';
+            showAlert('warning', 'No llegó respuesta en 30s. Revisa que el job de Spark esté ejecutándose y Kafka/Mongo estén activos.');
+            break;
+          }
+          await new Promise(r => setTimeout(r, 1000));
+
+          const r = await fetch('/mydata/predict/response/' + encodeURIComponent(uuid));
+          if (r.status === 404) continue; // aún no hay doc
+          if (!r.ok) throw new Error('Error al consultar respuesta: ' + r.status);
+          const doc = await r.json();
+
+          // Esperamos un documento con al menos { UUID, prediction }
+          if (doc && (doc.prediction !== undefined)) {
+            done = true;
+            statusBadge.className = 'badge text-bg-success';
+            statusBadge.textContent = 'listo';
+            predictionLine.textContent = Number(doc.prediction).toFixed(2) + ' min';
+            rawDoc.textContent = JSON.stringify(doc, null, 2);
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        statusBadge.className = 'badge text-bg-danger';
+        statusBadge.textContent = 'error';
+        showAlert('danger', 'Fallo enviando o recibiendo la predicción: ' + (err.message || err));
+      } finally {
+        pollSpinner.style.display = 'none';
+        setSpinning(false);
+      }
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      form.reset();
+      alertHost.innerHTML = '';
+      resultCard.style.display = 'none';
+    });
+  </script>
 </body>
 </html>

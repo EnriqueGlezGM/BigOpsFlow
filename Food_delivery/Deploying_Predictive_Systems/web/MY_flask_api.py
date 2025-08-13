@@ -1,66 +1,82 @@
-from flask import Flask, request, jsonify, render_template
-from kafka import KafkaProducer
 import json
 import uuid
-import pymongo
-import time
+from datetime import datetime
+from flask import Flask, request, jsonify, render_template
+from kafka import KafkaProducer
+from pymongo import MongoClient
 
 app = Flask(__name__)
 
-# Kafka producer
+# Kafka
 producer = KafkaProducer(
-    bootstrap_servers='kafka:9092',
-    value_serializer=lambda v: json.dumps(v).encode("utf-8")
+    bootstrap_servers="kafka:9092",
+    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    retries=3,
 )
+KAFKA_REQUEST_TOPIC = "mydata_prediction_request"
 
-# Mongo client
-mongo_client = pymongo.MongoClient("mongo")
-mongo_db = mongo_client.agile_data_science
-mongo_collection = mongo_db.mydata_prediction_response
+# Mongo
+mongo = MongoClient("mongo", 27017)
+db = mongo["agile_data_science"]
+col_resp = db["mydata_prediction_response"]      # donde escribe Spark
+col_req  = db["mydata_prediction_requests"]      # opcional: para ver solicitudes
 
 @app.route("/")
-def index():
+def home():
+    # si usas templates: return render_template("my_form.html")
     return render_template("my_form.html")
 
 @app.route("/mydata/predict", methods=["POST"])
-def predict():
-    data = dict(request.form)
-    data["UUID"] = str(uuid.uuid4())
+def mydata_predict():
+    # Recoge datos del form (o JSON)
+    payload = request.get_json() or request.form.to_dict()
 
-    print("📥 Recibido formulario:", data)
+    # Asegura tipos y formato ISO en timestamps si vienen vacíos
+    def to_iso(x):
+        if not x:
+            return datetime.utcnow().isoformat(timespec="seconds")
+        return x
 
+    # Genera UUID
+    uid = str(uuid.uuid4())
+    payload["UUID"] = uid
+
+    # (Opcional) normaliza tipos numéricos si llegan como string:
+    ints  = ["order_id", "delivery_fee", "commission_fee", "payment_processing_fee"]
+    floats = ["order_value", "refunds/chargebacks"]
+    for k in ints:
+        if k in payload and payload[k] not in (None, ""):
+            payload[k] = int(payload[k])
+    for k in floats:
+        if k in payload and payload[k] not in (None, ""):
+            payload[k] = float(payload[k])
+
+    # timestamps
+    payload["order_date_and_time"] = to_iso(payload.get("order_date_and_time"))
+    payload["delivery_date_and_time"] = to_iso(payload.get("delivery_date_and_time"))
+
+    # Guarda la solicitud (opcional, útil para auditoría)
     try:
-        data["order_value"] = float(data["order_value"])
-        data["refunds/chargebacks"] = float(data["refunds/chargebacks"])
-    except Exception as e:
-        print("❌ Error al convertir tipos:", e)
-        return jsonify({"status": "error", "message": str(e)}), 400
+        col_req.insert_one({"UUID": uid, "request": payload, "status": "submitted", "ts": datetime.utcnow()})
+    except Exception:
+        pass
 
-    try:
-        data["order_id"] = int(data["order_id"])
-        data["delivery_fee"] = float(data["delivery_fee"])
-        data["commission_fee"] = float(data["commission_fee"])
-        data["payment_processing_fee"] = float(data["payment_processing_fee"])
-        data["order_date_and_time"] = data["order_date_and_time"] + ":00"
-        data["delivery_date_and_time"] = data["delivery_date_and_time"] + ":00"
-    except Exception as e:
-        print("❌ Error al convertir tipos:", e)
-        return jsonify({"status": "error", "message": str(e)}), 400
+    # Publica en Kafka
+    producer.send(KAFKA_REQUEST_TOPIC, payload)
+    producer.flush()
 
-    print("📤 Enviando a Kafka:", data)
+    return jsonify({"id": uid, "status": "submitted"})
 
-    producer.send("mydata_prediction_request", value=data)
-
-    return jsonify({"status": "submitted", "id": data["UUID"]})
-
-@app.route("/mydata/predict/response/<id>", methods=["GET"])
-def get_response(id):
-    prediction = mongo_collection.find_one({"UUID": id})
-    if prediction:
-        prediction.pop("_id", None)
-        return jsonify(prediction)
-    else:
-        return jsonify({"status": "pending"})
+@app.route("/mydata/predict/response/<uid>", methods=["GET"])
+def mydata_predict_response(uid):
+    # Busca en la colección donde Spark escribe la predicción
+    doc = col_resp.find_one({"UUID": uid}, {"_id": 0})
+    if doc:
+        # Ejemplo doc: { "UUID": "...", "order_id": 123, "prediction": 76.12 }
+        return jsonify({"id": uid, "status": "done", **doc})
+    # Si no hay aún, devolvemos pending (HTTP 202)
+    return jsonify({"id": uid, "status": "pending"}), 202
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5050)
+    # Ejecuta Flask en el contenedor agile, expuesto en 5050 (ya mapeado en tu compose)
+    app.run(host="0.0.0.0", port=5050, debug=True)
