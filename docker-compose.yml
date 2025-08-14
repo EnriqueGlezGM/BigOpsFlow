@@ -4,7 +4,7 @@ services:
         container_name: agile
         hostname: agile
         labels:
-            description: Agile Data Science 2.0
+            description: TFM Enrique González Macías
             name: agile
         tty: true
         image: rjurney/agile_data_science:latest
@@ -27,7 +27,7 @@ services:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
-            bash -c "pip install kafka-python pymongo && /scripts/start-spark-cluster.sh && start-notebook.sh"
+            bash -c "pip install kafka-python pymongo && /scripts/init-elastic.sh && /scripts/start-spark-cluster.sh && start-notebook.sh"
         networks:
             - agile_net
 
@@ -35,16 +35,19 @@ services:
         container_name: elastic
         hostname: elastic
         labels:
-            description: Agile Data Science 2.0 Elastic
+            description: TFM Enrique González Macías
             name: elastic
         tty: True
-        image: docker.elastic.co/elasticsearch/elasticsearch:7.14.2
+        image: docker.elastic.co/elasticsearch/elasticsearch:9.1.2
         restart: always
         environment:
             cluster.name: "es-docker"
             discovery.type: single-node
             node.name: "elastic"
             ES_JAVA_OPTS: "-Xms1024m -Xmx1024m"
+            xpack.security.enabled: "false"
+            xpack.security.enrollment.enabled: "false"
+            xpack.security.http.ssl.enabled: "false"
         ports:
             - "9200:9200"
         ulimits:
@@ -61,7 +64,7 @@ services:
         container_name: mongo
         hostname: mongo
         labels:
-            description: Agile Data Science 2.0 MongoDB
+            description: TFM Enrique González Macías
             name: mongo
         image: mongo:5.0.3
         restart: always
@@ -76,7 +79,7 @@ services:
         container_name: mongo-express
         hostname: mongo-express
         labels:
-            description: Agile Data Science 2.0 Mongo Express
+            description: TFM Enrique González Macías
             name: mongo-express
         image: mongo-express:0.54.0
         depends_on:
@@ -93,7 +96,7 @@ services:
         container_name: zookeeper
         hostname: zookeeper
         labels:
-            description: Agile Data Science 2.0 ZooKeeper
+            description: TFM Enrique González Macías
             name: zookeeper
         image: wurstmeister/zookeeper
         ports:
@@ -105,7 +108,7 @@ services:
         container_name: kafka
         hostname: kafka
         labels:
-            description: Agile Data Science 2.0 Kafka
+            description: TFM Enrique González Macías
             name: kafka
         image: wurstmeister/kafka:latest
         ports:
@@ -121,7 +124,7 @@ services:
     kibana:
         container_name: kibana
         hostname: kibana
-        image: docker.elastic.co/kibana/kibana:7.14.2
+        image: docker.elastic.co/kibana/kibana:9.1.2
         restart: always
         environment:
             ELASTICSEARCH_HOSTS: "http://elastic:9200"
