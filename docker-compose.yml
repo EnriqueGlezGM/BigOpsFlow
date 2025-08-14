@@ -128,6 +128,11 @@ services:
         restart: always
         environment:
             ELASTICSEARCH_HOSTS: "http://elastic:9200"
+            CSP_STRICT: "false"
+            CSP_WARNLEGACYBROWSERS: "true"
+            XPACK_SECURITY_ENABLED: "false"
+            XPACK_SECURITY_SAMESITECOOKIES: "Lax"
+            XPACK_SECURITY_SECURECOOKIES: "false"
         ports:
             - "5601:5601"
         depends_on:
