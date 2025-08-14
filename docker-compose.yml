@@ -27,7 +27,7 @@ services:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
-            bash -c "pip install kafka-python pymongo && /scripts/init-elastic.sh && /scripts/start-spark-cluster.sh && start-notebook.sh"
+            bash -c "pip install kafka-python pymongo && /scripts/init-elastic.sh && /scripts/start-spark-cluster.sh && /scripts/init-kibana-dataview.sh && start-notebook.sh"
         networks:
             - agile_net
 
