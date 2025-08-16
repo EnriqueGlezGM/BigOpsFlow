@@ -26,7 +26,7 @@ services:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
-            bash -c "pip install kafka-python pymongo && /scripts/init-elastic-kibana.sh && /scripts/start-spark-cluster.sh && start-notebook.sh"
+            bash -c "pip install kafka-python pymongo pyspark papermill && /scripts/start-spark-cluster.sh && start-notebook.sh"
         networks:
             - agile_net
 
@@ -58,6 +58,11 @@ services:
             - ./logs:/usr/share/elasticsearch/logs
         networks:
             - agile_net
+        healthcheck:
+            test: ["CMD", "curl", "-fsS", "http://elastic:9200"]
+            interval: 10s
+            timeout: 5s
+            retries: 12
 
     mongo:
         container_name: mongo
@@ -138,6 +143,13 @@ services:
             - elastic
         networks:
             - agile_net
+        healthcheck:
+            test: ["CMD", "curl", "-fsS", "http://kibana:5601/api/status"]
+            interval: 10s
+            timeout: 5s
+            retries: 24
+            start_period: 30s
+
     predict_api:
         build:
             context: .
@@ -145,8 +157,17 @@ services:
         container_name: predict_api
         hostname: predict_api
         depends_on:
-            - kafka
-            - mongo
+            elastic:
+                condition: service_healthy
+            kibana:
+                condition: service_healthy
+            kafka:
+                condition: service_started
+            mongo:
+                condition: service_started
+        environment:
+            ELASTIC_URL: "http://elastic:9200"
+            KIBANA_URL: "http://kibana:5601"
         ports:
             - "5050:5050"   
         restart: unless-stopped

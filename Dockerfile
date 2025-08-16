@@ -2,14 +2,24 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# OS packages needed for bootstrapping ES/Kibana
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl jq ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copia scripts (init y entrypoint)
+COPY scripts/init-elastic-kibana.sh /scripts/init-elastic-kibana.sh
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /scripts/init-elastic-kibana.sh /app/entrypoint.sh
+
 # Dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiamos la app Flask (código + templates)
+# App Flask
 COPY Food_delivery/Deploying_Predictive_Systems/web/ /app/
 
-# Ajustes
 ENV PYTHONUNBUFFERED=1
 EXPOSE 5050
-CMD ["python", "MY_flask_api.py"]
+
+CMD ["/app/entrypoint.sh"]

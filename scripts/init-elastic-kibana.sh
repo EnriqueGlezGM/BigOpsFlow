@@ -208,23 +208,6 @@ ensure_kibana_dataview() {
   fi
 }
 
-set_kibana_advanced_settings() {
-  local BASE; BASE=$(kibana_base_path)
-  log "🌓 Ajustando Advanced Settings de Kibana (dark mode y otros)..."
-  # Ejemplo: {"theme:darkMode": true}
-  local code
-  code=$(curl "${CURL_OPTS[@]}" -o /tmp/kbn_adv.out -w "%{http_code}" \
-    -X POST "${BASE}/api/kibana/settings" \
-    -H 'kbn-xsrf: true' -H 'Content-Type: application/json' \
-    -d "{\"changes\": ${KIBANA_ADV_SETTINGS_JSON}}" || true)
-  if [[ "$code" =~ ^2 ]]; then
-    ok "Advanced Settings actualizados."
-  else
-    warn "No se pudieron actualizar los ajustes (HTTP $code):"
-    cat /tmp/kbn_adv.out; echo
-  fi
-}
-
 # =========================================================
 # Run
 # =========================================================
@@ -235,6 +218,5 @@ ensure_base_index
 
 wait_for_kibana
 ensure_kibana_dataview
-set_kibana_advanced_settings
 
 ok "🎉 bootstrap-analytics completado."
