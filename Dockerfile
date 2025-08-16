@@ -1,29 +1,15 @@
-ARG OWNER=jupyter
-ARG BASE_CONTAINER=$OWNER/pyspark-notebook:spark-3.2.0
-FROM $BASE_CONTAINER
+FROM python:3.10-slim
 
-LABEL maintainer="Russell Jurney <russell.jurney@gmail.com>"
+WORKDIR /app
 
-# Fix DL4006
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+# Dependencias
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-USER root
+# Copiamos la app Flask (código + templates)
+COPY Food_delivery/Deploying_Predictive_Systems/web/ /app/
 
-# Install the MongoDB Client CLI
-RUN apt-get update --yes && \
-    sudo apt-get install -y iputils-ping gnupg curl jq && \
-    wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add - && \
-    echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list && \
-    sudo apt-get update && \
-    sudo apt-get install -y mongodb-mongosh mongodb-org-tools && \
-    echo "mongodb-mongosh hold" | sudo dpkg --set-selections && \
-    echo "mongodb-org-tools hold" | sudo dpkg --set-selections && \
-    apt-get clean
-
-RUN pip install poetry
-
-COPY pyproject.toml /home/jovyan/pyproject.toml
-COPY poetry.lock /home/jovyan/poetry.lock
-COPY requirements.txt /home/jovyan/requirements.txt
-
-RUN poetry install && pip install -r requirements.txt
+# Ajustes
+ENV PYTHONUNBUFFERED=1
+EXPOSE 5050
+CMD ["python", "MY_flask_api.py"]

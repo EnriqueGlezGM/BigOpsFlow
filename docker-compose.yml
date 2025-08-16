@@ -22,7 +22,6 @@ services:
             - "8888:8888"
             - "5001:5000" #5001 por conflicto por MacOS
             - "8080:8080"
-            - "5050:5050"
         volumes:
             - ./:/home/jovyan
             - ./scripts:/scripts
@@ -137,6 +136,20 @@ services:
             - "5601:5601"
         depends_on:
             - elastic
+        networks:
+            - agile_net
+    predict_api:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: predict_api
+        hostname: predict_api
+        depends_on:
+            - kafka
+            - mongo
+        ports:
+            - "5050:5050"   
+        restart: unless-stopped
         networks:
             - agile_net
 

@@ -1,8 +1,0 @@
-{
-  "DeviceName": "/dev/sda1",
-  "Ebs": {
-    "Status": "attached",
-    "DeleteOnTermination": true,
-    "VolumeSize": 1024
-  }
-}
