@@ -1,101 +1,195 @@
-# Agile Data Science 2.0 (O'Reilly, 2017)
+# Food Delivery – Streaming Predictions (Kafka → Spark → Mongo/Elastic → Flask UI)
 
-This repository contains the updated sourcec code for [Agile Data Science 2.0](http://shop.oreilly.com/product/0636920051619.do), O'Reilly 2017. Now available at the [O'Reilly Store](http://shop.oreilly.com/product/0636920051619.do), on [Amazon](https://www.amazon.com/Agile-Data-Science-2-0-Applications/dp/1491960116) (in Paperback and Kindle) and on [O'Reilly Safari](https://www.safaribooksonline.com/library/view/agile-data-science/9781491960103/). Also available anywhere technical books are sold!
+Pipeline de predicción en tiempo real con:
+- **Kafka** (peticiones/respuestas),
+- **Spark Structured Streaming** (feature engineering + modelo),
+- **MongoDB** (trazabilidad),
+- **Elasticsearch + Kibana** (búsqueda/observabilidad),
+- **Flask** (formulario web de entrada y polling de resultados),
+- **Jupyter/Notebook** (job de streaming sencillo de ejecutar).
 
-NOTE: THE BOOK'S CODE IS OLD, BUT THE CODE IS MAINTAINED. USE DOCKER COMPOSE AND THE NOTEBOOKS IM THIS REPOSITORY.
+---
 
-You should refer to the Jupyter Notebooks in this repository rather than the book's source code, which is badly outdated and will no longer work for you.
+## 🧱 Requisitos
 
-Have problems? Please [file an issue](https://github.com/rjurney/Agile_Data_Code_2/issues)!
+- Docker y Docker Compose
+- Puertos libres:
+  - Jupyter/Agile: `8888` (si lo expones)
+  - Flask: `5050`
+  - Kafka: `9092`
+  - Mongo Express: `8081`
+  - Elasticsearch: `9200`
+  - Kibana: `5601`
+  - Spark Master UI: `8080`
 
-## Deep Discovery
+---
 
-Like my work? Connect with me [on LinkedIn](https://linkedin.com/in/russelljurney)!
+## 📦 Servicios (resumen)
 
-## Installation and Execution
+- **agile**: entorno con Spark + Jupyter (para el job de streaming/notebooks).
+- **predict_api**: Flask con formulario y endpoints (`/mydata/predict` + polling).
+- **kafka**: broker Kafka.
+- **mongo** + **mongo-express**: almacenamiento y UI simple.
+- **elastic** + **kibana**: búsqueda/visualización.
+- **(opcional)** script de bootstrap para crear **pipeline**, **index template**, **índice base**, **data view** y **modo oscuro** en Kibana.
 
-There is now only ONE version of the install: Docker via the [docker-compose.yml](docker-compose.yml). It is MUCH EASIER than the old methods.
+---
 
-To build the `agile` Docker image, run this:
-
-```bash
-docker-compose build agile
-```
-
-To run the `agile` Docker image, defined by the [`docker-compose.yml`](docker-compose.yml) and [`Dockerfile`](Dockerfile), run:
-
-```bash
-docker-compose up -d
-```
-
-Now visit: [http://localhost:8888](http://localhost:8888)
-
-## Other Images
-
-To manage the `mongo` image with Mongo Express, visit: [http://localhost:8081](http://localhost:8081)
-
-## Downloading Data
-
-Once the server comes up, download the data and you are ready to go. First open a shell in Jupyter Lab. The working directory corresponds to this folder.
-
-Now download the data:
+## 🚀 Arranque rápido
 
 ```bash
-./download.sh
+docker compose up -d --build
 ```
 
-## Running Examples
+Espera ~30–60s a que todo quede “healthy”.
 
-All scripts run from the base directory, except the web app which runs in ex. `ch08/web/`. Open [Welcome.ipynb](Welcome.ipynb) and get started.
+---
 
-### Jupyter Notebooks
+## ✅ Comprobaciones rápidas
 
-All notebooks assume you have run the jupyter notebook command from the project root directory `Agile_Data_Code_2`. If you are using a virtual machine image (Vagrant/Virtualbox or EC2), jupyter notebook is already running. See directions on port mapping to proceed.
+- **Spark Master UI**: http://localhost:8080  
+- **Mongo Express**: http://localhost:8081  
+  - DB `agile_data_science`
+  - Colecciones: `mydata_prediction_response`, `mydata_prediction_errors`
+- **Kibana**: http://localhost:5601  
+  - Data View: `mydata_prediction_response*`
+  - Campo temporal: `@ingest_ts`
+- **Flask UI**: http://localhost:5050  
 
-# The Data Value Pyramid
+---
 
-Originally by Pete Warden, the data value pyramid is how the book is organized and structured. We climb it as we go forward each chapter.
+## 📡 Tópicos de Kafka
 
-![Data Value Pyramid](images/climbing_the_pyramid_chapter_intro.png)
+- **Entrada**: `mydata_prediction_request`
+- **Salida**: `mydata_prediction_response`
 
-# System Architecture
+---
 
-The following diagrams are pulled from the book, and express the basic concepts in the system architecture. The front and back end architectures work together to make a complete predictive system.
+## 🔮 Modelo
 
-## Front End Architecture
+El modelo se carga desde `./models/pipeline_model.bin` (dentro de **agile**).  
+Asegúrate de que el path existe en el contenedor.
 
-This diagram shows how the front end architecture works in our flight delay prediction application. The user fills out a form with some basic information in a form on a web page, which is submitted to the server. The server fills out some neccesary fields derived from those in the form like "day of year" and emits a Kafka message containing a prediction request. Spark Streaming is listening on a Kafka queue for these requests, and makes the prediction, storing the result in MongoDB. Meanwhile, the client has received a UUID in the form's response, and has been polling another endpoint every second. Once the data is available in Mongo, the client's next request picks it up. Finally, the client displays the result of the prediction to the user! 
+---
 
-This setup is extremely fun to setup, operate and watch. Check out chapters 7 and 8 for more information!
+## 🧪 Probar de extremo a extremo
 
-![Front End Architecture](images/front_end_realtime_architecture.png)
+### 1) Lanza el job de streaming (Notebook)
 
-## Back End Architecture
+```bash
+docker exec -it agile bash
+```
 
-The back end architecture diagram shows how we train a classifier model using historical data (all flights from 2015) on disk (HDFS or Amazon S3, etc.) to predict flight delays in batch in Spark. We save the model to disk when it is ready. Next, we launch Zookeeper and a Kafka queue. We use Spark Streaming to load the classifier model, and then listen for prediction requests in a Kafka queue. When a prediction request arrives, Spark Streaming makes the prediction, storing the result in MongoDB where the web application can pick it up.
+Luego abre Jupyter y ejecuta **Run All** en el notebook `MY_Make predictions.ipynb`  
+o bien usa el script `.py` equivalente.
 
-This architecture is extremely powerful, and it is a huge benefit that we get to use the same code in batch and in realtime with PySpark Streaming.
+El job debe mostrar logs tipo:
 
-![Backend Architecture](images/back_end_realtime_architecture.png)
+```
+🔧 Creando SparkSession...
+✅ SparkSession creada
+🔧 Cargando PipelineModel...
+✅ Modelo cargado
+🔌 Conectando a Kafka (topic: mydata_prediction_request)...
+🚀 Iniciando streaming (Mongo + Kafka + Elasticsearch)...
+⏳ Esperando microbatches...
+```
 
-# Screenshots
+### 2) Abre la UI Flask
 
-Below are some examples of parts of the application we build in this book and in this repo. Check out the book for more!
+http://localhost:5050  
+- Rellena el formulario y envíalo.  
+- Se devuelve un `UUID` y empieza el **polling**.  
+- Cuando Spark produce la predicción, aparece en pantalla y se guarda en **Mongo**, **Kafka** y **Elasticsearch**.
 
-## Airline Entity Page
+### 3) Revisa en Kibana
 
-Each airline gets its own entity page, complete with a summary of its fleet and a description pulled from Wikipedia.
+- Abre **Discover**, Data View `mydata_prediction_response*`.
+- Ajusta el rango de fechas → “Now”.
+- Verás documentos con `UUID`, `order_id`, `prediction`, `@ingest_ts`, etc.
 
-![Airline Page](images/airline_page_enriched_wikipedia.png)
+---
 
-## Airplane Fleet Page
+## 🧰 Endpoints útiles (Flask)
 
-We demonstrate summarizing an entity with an airplane fleet page which describes the entire fleet.
+- `POST /mydata/predict` → envía un pedido, retorna `{"id": "...", "status": "submitted"}`  
+- `GET /mydata/predict/response/<UUID>` → polling hasta tener predicción
 
-![Airplane Fleet Page](images/airplanes_page_chart_v1_v2.png)
+---
 
-## Flight Delay Prediction UI
+## 🧪 Ejemplo de payload
 
-We create an entire realtime predictive system with a web front-end to submit prediction requests.
+```json
+{
+  "UUID": "generado-por-el-frontend",
+  "order_id": 1,
+  "customer_id": "cust_123",
+  "restaurant_id": "rest_456",
+  "order_date_and_time": "2025-08-06T13:00:00",
+  "delivery_date_and_time": "2025-08-06T13:45:00",
+  "order_value": 1000,
+  "delivery_fee": 100,
+  "payment_method": "credit_card",
+  "discounts_and_offers": "10% off",
+  "commission_fee": 100,
+  "payment_processing_fee": 20,
+  "refunds/chargebacks": 0
+}
+```
 
-![Predicting Flight Delays UI](images/predicting_flight_kafka_waiting.png)
+---
+
+## 🧩 Bootstrap de Elasticsearch/Kibana (automático)
+
+- Ingest Pipeline (quita `_id`, añade `@ingest_ts`, normaliza campos).
+- Index Template e índice base `mydata_prediction_response`.
+- Data View en Kibana (`mydata_prediction_response*`).
+- Ajustes avanzados (modo oscuro, etc.).
+
+---
+
+## 🧹 Parar y limpiar
+
+```bash
+docker compose down
+docker compose down -v   # ⚠️ borra volúmenes (Mongo/Elastic/Kibana)
+```
+
+---
+
+## 🩺 Troubleshooting rápido
+
+- **No aparecen jobs en Spark UI** → revisa SparkSession en el notebook.
+- **No hay datos en Kibana** → revisa Mongo (`mydata_prediction_response`), amplía rango de fechas, verifica logs.
+- **Errores en Elasticsearch** → pueden deberse a formatos de fecha; revisa logs del streaming.
+- **Kafka vacío** → confirma que el formulario hace POST y que el job está leyendo `mydata_prediction_request`.
+
+---
+
+## 🏗️ Estructura del repo
+
+```
+.
+├── docker-compose.yml
+├── Dockerfile.predict_api
+├── scripts/
+│   └── init-elastic-kibana.sh
+├── Food_delivery/
+│   └── Deploying_Predictive_Systems/
+│       ├── MY_Make predictions.ipynb
+│       ├── web/
+│       │   ├── MY_flask_api.py
+│       │   └── my_form.html
+│       └── models/
+│           └── pipeline_model.bin
+└── README.md
+```
+
+---
+
+## 🧭 ¿Por qué usar notebook en vez de spark-submit?
+
+- **Transparencia**: cada paso es visible y reproducible.  
+- **Iteración rápida**: cambiar lógica sin recompilar ni reiniciar contenedores.  
+- **Paridad**: el código del notebook es 1:1 con la versión `.py`.  
+- **Simplicidad**: para demo/PoC, menos fricción.
