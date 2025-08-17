@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-bs-theme="light">
+<html lang="es" data-bs-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -17,7 +17,7 @@
       <a class="navbar-brand fw-semibold" href="#">🍔 MyData · Realtime Predict</a>
       <div class="form-check form-switch ms-auto">
         <input class="form-check-input" type="checkbox" id="themeToggle">
-        <label class="form-check-label" for="themeToggle">Dark</label>
+        <label class="form-check-label" for="themeToggle">Light</label>
       </div>
     </div>
   </nav>
@@ -136,7 +136,7 @@
     const themeToggle = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
     themeToggle?.addEventListener('change', () => {
-      htmlEl.setAttribute('data-bs-theme', themeToggle.checked ? 'dark' : 'light');
+      htmlEl.setAttribute('data-bs-theme', themeToggle.checked ? 'light' : 'dark');
     });
 
     const form = document.getElementById('predictForm');
