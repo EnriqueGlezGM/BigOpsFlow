@@ -101,7 +101,7 @@ El modelo se carga desde `./models/pipeline_model.bin` (dentro de **agile**).
 
 ---
 
-## 🧹 Parar y limpiar
+## Parar y limpiar
 
 - **Detener los contenedores:**
 ```console
