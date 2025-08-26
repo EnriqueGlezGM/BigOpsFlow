@@ -23,8 +23,8 @@ col_req  = db["mydata_prediction_requests"]      # opcional: para ver solicitude
 
 @app.route("/")
 def home():
-    # si usas templates: return render_template("my_form.html")
-    return render_template("my_form.html")
+    # si usas templates: return render_template("form.html")
+    return render_template("form.html")
 
 @app.route("/mydata/predict", methods=["POST"])
 def mydata_predict():

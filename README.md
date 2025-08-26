@@ -1,12 +1,12 @@
-# Food Delivery – Streaming Predictions (Kafka → Spark → Mongo/Elastic → Flask UI)
+# Food Delivery – Streaming Predictions
 
 Pipeline de predicción en tiempo real con:
-- **Kafka** (peticiones/respuestas),
-- **Spark Structured Streaming** (feature engineering + modelo),
-- **MongoDB** (trazabilidad),
-- **Elasticsearch + Kibana** (búsqueda/observabilidad),
-- **Flask** (formulario web de entrada y polling de resultados),
-- **Jupyter/Notebook** (job de streaming sencillo de ejecutar).
+- **Kafka**: peticiones/respuestas
+- **Spark Structured Streaming** (feature engineering + modelo)
+- **MongoDB**: trazabilidad
+- **Elasticsearch + Kibana**: búsqueda/análisis,
+- **Flask**: formulario web de entrada y polling de resultados
+- **Jupyter/Notebook**: job de streaming sencillo de ejecutar
 
 ---
 
@@ -14,7 +14,7 @@ Pipeline de predicción en tiempo real con:
 
 - Docker y Docker Compose
 - Puertos libres:
-  - Jupyter/Agile: `8888` (si lo expones)
+  - Jupyter/Agile: `8888`
   - Flask: `5050`
   - Kafka: `9092`
   - Mongo Express: `8081`
@@ -24,41 +24,71 @@ Pipeline de predicción en tiempo real con:
 
 ---
 
-## 📦 Servicios (resumen)
+## 📦 Servicios
 
 - **agile**: entorno con Spark + Jupyter (para el job de streaming/notebooks).
 - **predict_api**: Flask con formulario y endpoints (`/mydata/predict` + polling).
 - **kafka**: broker Kafka.
 - **mongo** + **mongo-express**: almacenamiento y UI simple.
 - **elastic** + **kibana**: búsqueda/visualización.
-- **(opcional)** script de bootstrap para crear **pipeline**, **index template**, **índice base**, **data view** y **modo oscuro** en Kibana.
 
 ---
 
 ## 🚀 Arranque rápido
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
 Espera ~30–60s a que todo quede “healthy”.
+
+
+
+Para crear el modelo:
+```bash
+docker exec -it -u jovyan agile bash -lc '
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+export SPARK_HOME=/usr/local/spark-3.2.0-bin-hadoop3.2
+export PYSPARK_PYTHON=python
+export PYSPARK_DRIVER_PYTHON=python
+export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell"
+
+papermill "/home/jovyan/Food_delivery/Analysis.ipynb" "/home/jovyan/Food_delivery/Analysis.ipynb"
+'
+```
+
+Para la utilización del modelo:
+```bash
+docker exec -it -u jovyan agile bash -lc '
+export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+export SPARK_HOME=/usr/local/spark-3.2.0-bin-hadoop3.2
+export PYSPARK_PYTHON=python
+export PYSPARK_DRIVER_PYTHON=python
+export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell"
+
+papermill "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb" "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb"
+'
+```
+
+Ir a la [web](http://localhost:5050) para lanzar predicciones.
 
 ---
 
 ## ✅ Comprobaciones rápidas
 
-- **Spark Master UI**: http://localhost:8080  
-- **Mongo Express**: http://localhost:8081  
-  - DB `agile_data_science`
-  - Colecciones: `mydata_prediction_response`, `mydata_prediction_errors`
-- **Kibana**: http://localhost:5601  
-  - Data View: `mydata_prediction_response*`
+- **[Spark Master UI](http://localhost:8080)**
+- **[JupyterLab](http://127.0.0.1:8080)**
+- **[Mongo Express](http://localhost:8081)**
+  - DB: [agile_data_science](http://localhost:8081/db/agile_data_science)
+  - Colecciones: [mydata_prediction_response](http://localhost:8081/db/agile_data_science/mydata_prediction_response), [mydata_prediction_errors](http://localhost:8081/db/agile_data_science/mydata_prediction_errors)
+- **[Kibana](http://localhost:5601)**
+  - Data View: [mydata_prediction_response](http://localhost:5601/app/discover)
   - Campo temporal: `@ingest_ts`
-- **Flask UI**: http://localhost:5050  
+- **[Flask UI](http://localhost:5050)**
 
 ---
 
-## 📡 Tópicos de Kafka
+## 📡 Topics de Kafka
 
 - **Entrada**: `mydata_prediction_request`
 - **Salida**: `mydata_prediction_response`
@@ -67,125 +97,31 @@ Espera ~30–60s a que todo quede “healthy”.
 
 ## 🔮 Modelo
 
-El modelo se carga desde `./models/pipeline_model.bin` (dentro de **agile**).  
-Asegúrate de que el path existe en el contenedor.
-
----
-
-## 🧪 Probar de extremo a extremo
-
-### 1) Lanza el job de streaming (Notebook)
-
-```bash
-docker exec -it agile bash
-```
-
-Luego abre Jupyter y ejecuta **Run All** en el notebook `MY_Make predictions.ipynb`  
-o bien usa el script `.py` equivalente.
-
-El job debe mostrar logs tipo:
-
-```
-🔧 Creando SparkSession...
-✅ SparkSession creada
-🔧 Cargando PipelineModel...
-✅ Modelo cargado
-🔌 Conectando a Kafka (topic: mydata_prediction_request)...
-🚀 Iniciando streaming (Mongo + Kafka + Elasticsearch)...
-⏳ Esperando microbatches...
-```
-
-### 2) Abre la UI Flask
-
-http://localhost:5050  
-- Rellena el formulario y envíalo.  
-- Se devuelve un `UUID` y empieza el **polling**.  
-- Cuando Spark produce la predicción, aparece en pantalla y se guarda en **Mongo**, **Kafka** y **Elasticsearch**.
-
-### 3) Revisa en Kibana
-
-- Abre **Discover**, Data View `mydata_prediction_response*`.
-- Ajusta el rango de fechas → “Now”.
-- Verás documentos con `UUID`, `order_id`, `prediction`, `@ingest_ts`, etc.
-
----
-
-## 🧰 Endpoints útiles (Flask)
-
-- `POST /mydata/predict` → envía un pedido, retorna `{"id": "...", "status": "submitted"}`  
-- `GET /mydata/predict/response/<UUID>` → polling hasta tener predicción
-
----
-
-## 🧪 Ejemplo de payload
-
-```json
-{
-  "UUID": "generado-por-el-frontend",
-  "order_id": 1,
-  "customer_id": "cust_123",
-  "restaurant_id": "rest_456",
-  "order_date_and_time": "2025-08-06T13:00:00",
-  "delivery_date_and_time": "2025-08-06T13:45:00",
-  "order_value": 1000,
-  "delivery_fee": 100,
-  "payment_method": "credit_card",
-  "discounts_and_offers": "10% off",
-  "commission_fee": 100,
-  "payment_processing_fee": 20,
-  "refunds/chargebacks": 0
-}
-```
-
----
-
-## 🧩 Bootstrap de Elasticsearch/Kibana (automático)
-
-- Ingest Pipeline (quita `_id`, añade `@ingest_ts`, normaliza campos).
-- Index Template e índice base `mydata_prediction_response`.
-- Data View en Kibana (`mydata_prediction_response*`).
-- Ajustes avanzados (modo oscuro, etc.).
+El modelo se carga desde `./models/pipeline_model.bin` (dentro de **agile**). 
 
 ---
 
 ## 🧹 Parar y limpiar
 
-```bash
+- **Detener los contenedores:**
+```console
 docker compose down
-docker compose down -v   # ⚠️ borra volúmenes (Mongo/Elastic/Kibana)
 ```
 
----
-
-## 🩺 Troubleshooting rápido
-
-- **No aparecen jobs en Spark UI** → revisa SparkSession en el notebook.
-- **No hay datos en Kibana** → revisa Mongo (`mydata_prediction_response`), amplía rango de fechas, verifica logs.
-- **Errores en Elasticsearch** → pueden deberse a formatos de fecha; revisa logs del streaming.
-- **Kafka vacío** → confirma que el formulario hace POST y que el job está leyendo `mydata_prediction_request`.
-
----
-
-## 🏗️ Estructura del repo
-
-```
-.
-├── docker-compose.yml
-├── Dockerfile.predict_api
-├── scripts/
-│   └── init-elastic-kibana.sh
-├── Food_delivery/
-│   └── Deploying_Predictive_Systems/
-│       ├── MY_Make predictions.ipynb
-│       ├── web/
-│       │   ├── MY_flask_api.py
-│       │   └── my_form.html
-│       └── models/
-│           └── pipeline_model.bin
-└── README.md
+- **Eliminar todos los contenedores:**
+```console
+docker rm -f $(docker ps -a -q)
 ```
 
----
+- **Eliminar todos los volúmenes:**
+```console
+docker volume rm $(docker volume ls -q)
+```
+
+- **Eliminar todas las imágenes:**
+```console
+docker rmi $(docker images -aq)
+```
 
 ## 🧭 ¿Por qué usar notebook en vez de spark-submit?
 

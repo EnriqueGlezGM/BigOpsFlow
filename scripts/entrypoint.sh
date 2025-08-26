@@ -16,4 +16,4 @@ if [ -x /scripts/init-elastic-kibana.sh ]; then
 fi
 
 echo "🚀 Starting Flask API ..."
-exec python MY_flask_api.py
+exec python Flask_API.py
