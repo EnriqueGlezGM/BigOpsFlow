@@ -10,7 +10,7 @@ Pipeline de predicción en tiempo real con:
 
 ---
 
-## 🧱 Requisitos
+## Requisitos
 
 - Docker y Docker Compose
 - Puertos libres:
@@ -24,7 +24,7 @@ Pipeline de predicción en tiempo real con:
 
 ---
 
-## 📦 Servicios
+## Servicios
 
 - **agile**: entorno con Spark + Jupyter (para el job de streaming/notebooks).
 - **predict_api**: Flask con formulario y endpoints (`/mydata/predict` + polling).
@@ -34,7 +34,7 @@ Pipeline de predicción en tiempo real con:
 
 ---
 
-## 🚀 Arranque rápido
+## Arranque rápido
 
 ```bash
 docker compose up -d
@@ -74,7 +74,7 @@ Ir a la [web](http://localhost:5050) para lanzar predicciones.
 
 ---
 
-## ✅ Comprobaciones rápidas
+## Comprobaciones rápidas
 
 - **[Spark Master UI](http://localhost:8080)**
 - **[JupyterLab](http://127.0.0.1:8080)**
@@ -88,14 +88,14 @@ Ir a la [web](http://localhost:5050) para lanzar predicciones.
 
 ---
 
-## 📡 Topics de Kafka
+## Topics de Kafka
 
 - **Entrada**: `mydata_prediction_request`
 - **Salida**: `mydata_prediction_response`
 
 ---
 
-## 🔮 Modelo
+## Modelo
 
 El modelo se carga desde `./models/pipeline_model.bin` (dentro de **agile**). 
 
@@ -123,7 +123,7 @@ docker volume rm $(docker volume ls -q)
 docker rmi $(docker images -aq)
 ```
 
-## 🧭 ¿Por qué usar notebook en vez de spark-submit?
+## ¿Por qué usar notebook en vez de spark-submit?
 
 - **Transparencia**: cada paso es visible y reproducible.  
 - **Iteración rápida**: cambiar lógica sin recompilar ni reiniciar contenedores.  
