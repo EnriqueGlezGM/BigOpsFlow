@@ -7,7 +7,9 @@ services:
             description: TFM Enrique González Macías
             name: agile
         tty: true
-        image: rjurney/agile_data_science:latest
+        build: 
+            context: .
+            dockerfile: Dockerfile.agile
         restart: on-failure
         user: root
         environment:
@@ -20,13 +22,14 @@ services:
             - mongo-express
         ports:
             - "8888:8888"
-            - "5001:5000" #5001 por conflicto por MacOS
+            - "5001:5000"
             - "8080:8080"
         volumes:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
-            bash -c "pip install kafka-python pymongo pyspark==3.2.0 papermill && /scripts/start-spark-cluster.sh && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
+            bash -lc "/scripts/start-spark-cluster.sh &&
+                    start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
         networks:
             - agile_net
 
@@ -153,7 +156,7 @@ services:
     predict_api:
         build:
             context: .
-            dockerfile: Dockerfile
+            dockerfile: Dockerfile.predict_api
         container_name: predict_api
         hostname: predict_api
         depends_on:

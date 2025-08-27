@@ -47,24 +47,27 @@ Espera ~30–60s a que todo quede “healthy”.
 Para crear el modelo:
 ```bash
 docker exec -it -u jovyan agile bash -lc '
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-export SPARK_HOME=/usr/local/spark-3.2.0-bin-hadoop3.2
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export SPARK_HOME=/usr/local/spark
+export PATH="$SPARK_HOME/bin:$PATH"
 export PYSPARK_PYTHON=python
 export PYSPARK_DRIVER_PYTHON=python
-export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell"
+export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6 pyspark-shell"
 
-papermill "/home/jovyan/Food_delivery/Analysis.ipynb" "/home/jovyan/Food_delivery/Analysis.ipynb"
+papermill "/home/jovyan/Food_delivery/Analysis.ipynb" \
+          "/home/jovyan/Food_delivery/Analysis.ipynb"
 '
 ```
 
 Para la utilización del modelo:
 ```bash
 docker exec -it -u jovyan agile bash -lc '
-export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-export SPARK_HOME=/usr/local/spark-3.2.0-bin-hadoop3.2
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export SPARK_HOME=/usr/local/spark
+export PATH="$SPARK_HOME/bin:$PATH"
 export PYSPARK_PYTHON=python
 export PYSPARK_DRIVER_PYTHON=python
-export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.0 pyspark-shell"
+export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6 pyspark-shell"
 
 papermill "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb" "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb"
 '
@@ -77,7 +80,7 @@ Ir a la [web](http://localhost:5050) para lanzar predicciones.
 ## Comprobaciones rápidas
 
 - **[Spark Master UI](http://localhost:8080)**
-- **[JupyterLab](http://127.0.0.1:8080)**
+- **[JupyterLab](http://127.0.0.1:8888)**
 - **[Mongo Express](http://localhost:8081)**
   - DB: [agile_data_science](http://localhost:8081/db/agile_data_science)
   - Colecciones: [mydata_prediction_response](http://localhost:8081/db/agile_data_science/mydata_prediction_response), [mydata_prediction_errors](http://localhost:8081/db/agile_data_science/mydata_prediction_errors)

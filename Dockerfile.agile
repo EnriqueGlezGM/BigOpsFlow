@@ -1,0 +1,33 @@
+# Parte de la imagen original de Agile Data Science
+FROM rjurney/agile_data_science:latest
+
+USER root
+
+# 1) Java 17 (requerido por Spark 3.5.x)
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jdk curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:${PATH}"
+
+# 2) Spark 3.5.6 (Hadoop 3) y symlink /usr/local/spark
+ARG SPARK_VER=3.5.6
+ARG HADOOP_PROFILE=hadoop3
+RUN mkdir -p /usr/local && \
+    curl -fsSL "https://downloads.apache.org/spark/spark-${SPARK_VER}/spark-${SPARK_VER}-bin-${HADOOP_PROFILE}.tgz" \
+    | tar -xz -C /usr/local && \
+    ln -sfn "/usr/local/spark-${SPARK_VER}-bin-${HADOOP_PROFILE}" /usr/local/spark
+
+ENV SPARK_HOME=/usr/local/spark
+ENV PATH="$SPARK_HOME/bin:$PATH"
+
+# 3) Python deps (coincide con lo que usabas en compose)
+RUN pip install --no-cache-dir \
+      pyspark==3.5.6 \
+      kafka-python \
+      pymongo \
+      papermill
+
+# 4) Entrypoint igual que antes (opcional: puedes moverlo al compose)
+#    Si tienes /scripts/start-spark-cluster.sh en el volumen, puedes dejar que compose lo ejecute.
