@@ -24,6 +24,21 @@
 
   <main class="container my-5">
     <div class="row g-4">
+      <!-- Operaciones (entrenar / predecir) -->
+      <div class="col-12">
+        <div class="card shadow-sm mb-2">
+          <div class="card-body p-4 d-flex flex-wrap gap-2 align-items-center">
+            <strong class="me-2">Operaciones:</strong>
+            <button type="button" class="btn btn-success" id="btnTrain">Entrenar modelo</button>
+            <button type="button" class="btn btn-outline-success" id="btnPredictJob">Lanzar predicción (notebook)</button>
+            <span id="opsStatus" class="ms-2 text-secondary small"></span>
+          </div>
+        </div>
+        <details class="mb-4">
+          <summary class="small">Ver logs del último job</summary>
+          <pre class="code small mb-0" id="opsLog" style="max-height:240px; overflow:auto"></pre>
+        </details>
+      </div>
       <!-- Formulario -->
       <div class="col-12 col-lg-7">
         <div class="card shadow-sm">
@@ -143,6 +158,10 @@
     const predictionLine = document.getElementById('predictionLine');
     const rawDoc = document.getElementById('rawDoc');
     const spinEls = document.querySelectorAll('.spin');
+    const btnTrain = document.getElementById('btnTrain');
+    const btnPredictJob = document.getElementById('btnPredictJob');
+    const opsStatus = document.getElementById('opsStatus');
+    const opsLog = document.getElementById('opsLog');
 
     function setSpinning(on) {
       spinEls.forEach(el => el.style.display = on ? 'inline-block' : 'none');
@@ -244,6 +263,36 @@
       alertHost.innerHTML = '';
       resultCard.style.display = 'none';
     });
+
+    // ---- Botones de operaciones ----
+    async function launchOp(path) {
+      opsStatus.textContent = 'lanzando…';
+      opsLog.textContent = '';
+      try {
+        const res = await fetch(path, { method: 'POST' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const jobId = data.id;
+        opsStatus.textContent = `job ${jobId} en ejecución…`;
+
+        // Poll status/logs
+        let done = false;
+        while (!done) {
+          await new Promise(r => setTimeout(r, 1500));
+          const s = await fetch(`/ops/status/${encodeURIComponent(jobId)}`);
+          if (!s.ok) break;
+          const j = await s.json();
+          opsLog.textContent = j.log || '';
+          if (j.status === 'done') { done = true; opsStatus.textContent = 'completado'; }
+          else if (j.status === 'error') { done = true; opsStatus.textContent = 'error'; }
+        }
+      } catch (e) {
+        opsStatus.textContent = 'falló: ' + (e.message || e);
+      }
+    }
+
+    btnTrain?.addEventListener('click', () => launchOp('/ops/train'));
+    btnPredictJob?.addEventListener('click', () => launchOp('/ops/predict'));
   </script>
 </body>
 </html>

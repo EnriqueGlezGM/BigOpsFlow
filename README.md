@@ -37,7 +37,7 @@ Pipeline de predicción en tiempo real con:
 ## Arranque rápido
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 Espera ~30–60s a que todo quede “healthy”.
@@ -108,7 +108,7 @@ El modelo se carga desde `./models/pipeline_model.bin` (dentro de **agile**).
 
 - **Detener los contenedores:**
 ```console
-docker compose down
+docker compose down --rmi local --volumes --remove-orphans
 ```
 
 - **Eliminar todos los contenedores:**

@@ -2,10 +2,12 @@ import json
 import uuid
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template
+import requests
 from kafka import KafkaProducer
 from pymongo import MongoClient
 
 app = Flask(__name__)
+AGILE_SERVICE = "http://agile:5000"
 
 # Kafka
 producer = KafkaProducer(
@@ -76,6 +78,39 @@ def mydata_predict_response(uid):
         return jsonify({"id": uid, "status": "done", **doc})
     # Si no hay aún, devolvemos pending (HTTP 202)
     return jsonify({"id": uid, "status": "pending"}), 202
+
+
+# ---- Operaciones: entrenar / predecir (vía microservicio en agile) ----
+@app.route("/ops/train", methods=["POST"]) 
+def ops_train():
+    try:
+        r = requests.post(f"{AGILE_SERVICE}/run-train", timeout=5)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ops/predict", methods=["POST"]) 
+def ops_predict():
+    try:
+        r = requests.post(f"{AGILE_SERVICE}/run-predict", timeout=5)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ops/status/<job_id>", methods=["GET"]) 
+def ops_status(job_id):
+    try:
+        r = requests.get(f"{AGILE_SERVICE}/jobs/{job_id}", timeout=5)
+        if r.status_code == 404:
+            return jsonify({"error": "not_found"}), 404
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     # Ejecuta Flask en el contenedor agile, expuesto en 5050 (ya mapeado en tu compose)
