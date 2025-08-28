@@ -42,38 +42,7 @@ docker compose up -d --build
 
 Espera ~30–60s a que todo quede “healthy”.
 
-
-
-Para crear el modelo:
-```bash
-docker exec -it -u jovyan agile bash -lc '
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-export SPARK_HOME=/usr/local/spark
-export PATH="$SPARK_HOME/bin:$PATH"
-export PYSPARK_PYTHON=python
-export PYSPARK_DRIVER_PYTHON=python
-export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6 pyspark-shell"
-
-papermill "/home/jovyan/Food_delivery/Analysis.ipynb" \
-          "/home/jovyan/Food_delivery/Analysis.ipynb"
-'
-```
-
-Para la utilización del modelo:
-```bash
-docker exec -it -u jovyan agile bash -lc '
-export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-export SPARK_HOME=/usr/local/spark
-export PATH="$SPARK_HOME/bin:$PATH"
-export PYSPARK_PYTHON=python
-export PYSPARK_DRIVER_PYTHON=python
-export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6 pyspark-shell"
-
-papermill "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb" "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb"
-'
-```
-
-Ir a la [web](http://localhost:5050) para lanzar predicciones.
+Ir a la [Flask UI](http://localhost:5050) para lanzar predicciones.
 
 ---
 
