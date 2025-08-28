@@ -35,10 +35,7 @@
 
             <form id="predictForm" novalidate>
               <div class="row g-3">
-                <div class="col-12 col-md-6">
-                  <label for="order_id" class="form-label">Order ID</label>
-                  <input type="number" class="form-control" id="order_id" value="1" min="1" step="1" required>
-                </div>
+                
 
                 <div class="col-12 col-md-6">
                   <label for="customer_id" class="form-label">Customer ID</label>
@@ -55,10 +52,7 @@
                   <input type="datetime-local" class="form-control" id="order_date_and_time" value="2025-08-06T13:00" required>
                 </div>
 
-                <div class="col-12 col-md-6">
-                  <label for="delivery_date_and_time" class="form-label">Delivery Date and Time</label>
-                  <input type="datetime-local" class="form-control" id="delivery_date_and_time" value="2025-08-06T13:45" required>
-                </div>
+                
 
                 <div class="col-12 col-md-6">
                   <label for="order_value" class="form-label">Order Value</label>
@@ -181,11 +175,9 @@
 
       // Construimos el JSON exactamente como espera Spark (nombres y tipos)
       const payload = {
-        order_id: Number(document.getElementById('order_id').value),
         customer_id: document.getElementById('customer_id').value,
         restaurant_id: document.getElementById('restaurant_id').value,
         order_date_and_time: toRFC3339Local(document.getElementById('order_date_and_time').value),
-        delivery_date_and_time: toRFC3339Local(document.getElementById('delivery_date_and_time').value),
         order_value: Number(document.getElementById('order_value').value),
         delivery_fee: Number(document.getElementById('delivery_fee').value),
         payment_method: document.getElementById('payment_method').value,

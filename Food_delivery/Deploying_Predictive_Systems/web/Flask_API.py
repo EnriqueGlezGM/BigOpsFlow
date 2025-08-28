@@ -42,7 +42,7 @@ def mydata_predict():
     payload["UUID"] = uid
 
     # (Opcional) normaliza tipos numéricos si llegan como string:
-    ints  = ["order_id", "delivery_fee", "commission_fee", "payment_processing_fee"]
+    ints  = [ "delivery_fee", "commission_fee", "payment_processing_fee"]
     floats = ["order_value", "refunds/chargebacks"]
     for k in ints:
         if k in payload and payload[k] not in (None, ""):
@@ -53,7 +53,7 @@ def mydata_predict():
 
     # timestamps
     payload["order_date_and_time"] = to_iso(payload.get("order_date_and_time"))
-    payload["delivery_date_and_time"] = to_iso(payload.get("delivery_date_and_time"))
+    
 
     # Guarda la solicitud (opcional, útil para auditoría)
     try:
@@ -72,7 +72,7 @@ def mydata_predict_response(uid):
     # Busca en la colección donde Spark escribe la predicción
     doc = col_resp.find_one({"UUID": uid}, {"_id": 0})
     if doc:
-        # Ejemplo doc: { "UUID": "...", "order_id": 123, "prediction": 76.12 }
+        # Ejemplo doc: { "UUID": "...", "prediction": 76.12 }
         return jsonify({"id": uid, "status": "done", **doc})
     # Si no hay aún, devolvemos pending (HTTP 202)
     return jsonify({"id": uid, "status": "pending"}), 202
