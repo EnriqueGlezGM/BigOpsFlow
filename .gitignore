@@ -37,5 +37,3 @@ deep
 .cache
 logs
 .wget-hsts
-Food_delivery/Analysis.ipynb
-Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb

@@ -14,10 +14,10 @@
 <body class="bg-body-tertiary">
   <nav class="navbar navbar-expand-lg bg-body border-bottom sticky-top">
     <div class="container">
-      <a class="navbar-brand fw-semibold" href="#">TFM Enrique González Macías</a>
+      <a class="navbar-brand fw-semibold" href="#">TFM - Enrique González Macías</a>
       <div class="form-check form-switch ms-auto">
         <input class="form-check-input" type="checkbox" id="themeToggle">
-        <label class="form-check-label" for="themeToggle">Light</label>
+        <label class="form-check-label" for="themeToggle">Modo claro</label>
       </div>
     </div>
   </nav>
@@ -92,10 +92,12 @@
               </div>
 
               <div class="d-flex align-items-center gap-3 mt-4">
-                <button type="submit" class="btn btn-primary" id="submitBtn">
-                  <span class="spinner-border spinner-border-sm me-2 spin" role="status" aria-hidden="true"></span>
-                  Enviar
-                </button>
+                <span class="d-inline-block" id="submitTooltipWrap" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Habilitado cuando el streaming de predicción esté activo" style="cursor: not-allowed;">
+                  <button type="submit" class="btn btn-primary" id="submitBtn">
+                    <span class="spinner-border spinner-border-sm me-2 spin" role="status" aria-hidden="true"></span>
+                    Enviar
+                  </button>
+                </span>
                 <button type="button" class="btn btn-outline-secondary" id="resetBtn">Reset</button>
               </div>
             </form>
@@ -136,6 +138,7 @@
 
     const form = document.getElementById('predictForm');
     const submitBtn = document.getElementById('submitBtn');
+    const submitTooltipWrap = document.getElementById('submitTooltipWrap');
     const resultCard = document.getElementById('resultCard');
     const alertHost = document.getElementById('alertHost');
     const pollSpinner = document.getElementById('pollSpinner');
@@ -163,14 +166,38 @@
       return dtValue ? dtValue + ':00' : null; // add seconds
     }
 
+    // Bootstrap tooltip (requires JS bundle loaded below)
+    let submitTooltip;
+    try { submitTooltip = new bootstrap.Tooltip(submitTooltipWrap); } catch {}
+
+    function updateSubmitTooltip(running) {
+      const msg = 'Habilitado cuando el streaming de predicción esté activo';
+      const enabled = !!running;
+      if (submitTooltip) {
+        if (enabled) {
+          submitTooltip.hide();
+          submitTooltip.disable();
+        } else {
+          submitTooltip.enable();
+          if (submitTooltip.setContent) {
+            submitTooltip.setContent({'.tooltip-inner': msg});
+          }
+        }
+      }
+      submitTooltipWrap.setAttribute('data-bs-title', enabled ? '' : msg);
+      submitTooltipWrap.style.cursor = enabled ? 'pointer' : 'not-allowed';
+    }
+
     async function refreshPredictStatus() {
       try {
         const r = await fetch('/ops/active/predict');
         if (!r.ok) throw new Error('status ' + r.status);
         const { running } = await r.json();
         submitBtn.disabled = !running;
+        updateSubmitTooltip(running);
       } catch {
         submitBtn.disabled = true;
+        updateSubmitTooltip(false);
       }
     }
 
@@ -219,14 +246,14 @@
 
         // Polling al backend (que a su vez mira Mongo) hasta 30s
         const started = Date.now();
-        const timeoutMs = 30000;
+        const timeoutMs = 60000;
         let done = false;
 
         while (!done) {
           if (Date.now() - started > timeoutMs) {
             statusBadge.className = 'badge text-bg-warning';
             statusBadge.textContent = 'timeout';
-            showAlert('warning', 'No llegó respuesta en 30s. Revisa que el job de Spark esté ejecutándose y Kafka/Mongo estén activos.');
+            showAlert('warning', 'No llegó respuesta en 60s. Revisa que el job de Spark esté ejecutándose y Kafka/Mongo estén activos.');
             break;
           }
           await new Promise(r => setTimeout(r, 1000));
@@ -266,5 +293,6 @@
 
     // Operaciones se gestionan en el arranque del backend; UI sin botones
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
