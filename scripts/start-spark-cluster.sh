@@ -30,8 +30,19 @@ if [ "$?" -ne 0 ]; then
 fi
 
 # Inicia el microservicio Flask para lanzar Papermill (puerto 5000)
-python /scripts/run_papermill.py \
+mkdir -p /home/jovyan/logs
+PYBIN="/opt/conda/bin/python"
+if [ ! -x "$PYBIN" ]; then PYBIN="python"; fi
+"$PYBIN" /scripts/run_papermill.py \
   >/home/jovyan/logs/papermill_service.log 2>&1 &
+
+# Orquesta automáticamente: entrenamiento -> predicción (en background)
+# Controlado por ORCHESTRATE_ON_START (por defecto: true)
+ORCHESTRATE_ON_START="${ORCHESTRATE_ON_START:-true}"
+if [ "$ORCHESTRATE_ON_START" = "true" ] && [ -f /scripts/orchestrate_jobs.sh ]; then
+  nohup bash /scripts/orchestrate_jobs.sh \
+    >/home/jovyan/logs/orchestrator.log 2>&1 &
+fi
 
 # # Inicia Jupyter (si quieres que lo vea el navegador)
 # jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root || true

@@ -16,6 +16,8 @@ services:
             JUPYTER_ENABLE_LAB: "yes"
             GRANT_SUDO: "yes"
             JUPYTER_ALLOW_INSECURE_WRITES: "true"
+            ORCHESTRATE_ON_START: "false"
+            AUTO_CHAIN_PREDICT_AFTER_TRAIN: "false"
         depends_on:
             - elastic
             - mongo
@@ -173,8 +175,6 @@ services:
         environment:
             ELASTIC_URL: "http://elastic:9200"
             KIBANA_URL: "http://kibana:5601"
-            AUTO_RUN_TRAIN: "true"
-            AUTO_RUN_PREDICT: "true"
         ports:
             - "5050:5050"   
         restart: unless-stopped

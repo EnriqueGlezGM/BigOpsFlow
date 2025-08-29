@@ -16,8 +16,10 @@ echo "🚀 Running init-elastic-kibana.sh ..."
 fi
 
 # Opcional: lanzar entrenamiento/streaming automáticamente vía microservicio en agile
-AUTO_RUN_TRAIN="${AUTO_RUN_TRAIN:-true}"
-AUTO_RUN_PREDICT="${AUTO_RUN_PREDICT:-true}"
+# Compat: ya no se recomienda autolanzar desde predict_api.
+# Por defecto queda desactivado y puede activarse explícitamente.
+AUTO_RUN_TRAIN="${AUTO_RUN_TRAIN:-false}"
+AUTO_RUN_PREDICT="${AUTO_RUN_PREDICT:-false}"
 
 echo "⏳ Waiting for agile service at http://agile:5000 ..."
 until curl -fsS "http://agile:5000/healthz" >/dev/null; do sleep 2; done

@@ -112,6 +112,16 @@ def ops_status(job_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route("/ops/active/<job_type>", methods=["GET"]) 
+def ops_active(job_type):
+    try:
+        r = requests.get(f"{AGILE_SERVICE}/status/{job_type}", timeout=5)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == "__main__":
     # Ejecuta Flask en el contenedor agile, expuesto en 5050 (ya mapeado en tu compose)
     app.run(host="0.0.0.0", port=5050, debug=True)

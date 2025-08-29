@@ -13,6 +13,9 @@ app = Flask(__name__)
 # In-memory job registry (simple and good enough for dev/demo)
 jobs = {}
 
+# Feature flags via env
+AUTO_CHAIN_PREDICT = (os.environ.get("AUTO_CHAIN_PREDICT_AFTER_TRAIN", "true").lower() == "true")
+
 
 def _run_job(job_id: str, cmd: str, cwd: Optional[str] = None):
     jobs[job_id]["status"] = "running"
@@ -43,6 +46,21 @@ def _run_job(job_id: str, cmd: str, cwd: Optional[str] = None):
         jobs[job_id]["returncode"] = rc
         jobs[job_id]["ended_at"] = datetime.utcnow().isoformat(timespec="seconds")
         jobs[job_id]["status"] = "done" if rc == 0 else "error"
+        # Auto-encadenar: si el job terminado es de tipo 'train' y ha ido bien,
+        # asegúrate de que el streaming de predicción esté corriendo.
+        try:
+            if rc == 0 and jobs[job_id].get("type") == "train" and AUTO_CHAIN_PREDICT:
+                # ¿Hay ya un predict corriendo?
+                has_running_predict = any(
+                    j.get("type") == "predict" and j.get("status") == "running"
+                    for j in jobs.values()
+                )
+                if not has_running_predict:
+                    pid = _launch_script("predict_stream.sh")
+                    jobs[job_id]["chained_predict_job_id"] = pid
+        except Exception as _:
+            # No interrumpir el flujo por errores en el encadenado
+            pass
     except Exception as exc:
         jobs[job_id]["status"] = "error"
         jobs[job_id]["error"] = str(exc)
@@ -69,9 +87,9 @@ def _script_path(name: str) -> str:
 def _launch_script(script_name: str):
     job_type = "train" if script_name == "train.sh" else "predict"
 
-    # Evita lanzar duplicados: si ya hay un job en ejecución de este tipo, reutiliza su id
+    # Evita duplicados: si ya hay job encolado o ejecutándose de este tipo, reutiliza su id
     for j in jobs.values():
-        if j.get("type") == job_type and j.get("status") == "running":
+        if j.get("type") == job_type and j.get("status") in ("queued", "running"):
             return j["id"]
 
     job_id = str(uuid.uuid4())
@@ -86,7 +104,8 @@ def _launch_script(script_name: str):
 
     # Prefer running the script if present; fallback to inline papermill
     if os.path.exists(script):
-        cmd = f"bash -lc '{shlex.quote(script)}'"
+        # Ejecuta siempre vía bash para evitar depender del bit ejecutable del archivo
+        cmd = f"bash -lc 'bash {shlex.quote(script)}'"
     else:
         # Fallback inline command (should not be needed if scripts exist)
         if script_name == "train.sh":
@@ -142,6 +161,27 @@ def job_status(job_id: str):
 @app.get("/healthz")
 def healthz():
     return jsonify({"status": "ok"})
+
+
+@app.get("/jobs")
+def jobs_list():
+    # Return jobs ordered by created_at desc (best-effort)
+    ordered = sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True)
+    return jsonify({"count": len(ordered), "jobs": ordered[:50]})
+
+
+@app.get("/status/<job_type>")
+def status_by_type(job_type: str):
+    # Return whether there is an active running job of given type (e.g., 'predict' or 'train')
+    active = None
+    # Prefer the most recently created running job
+    for j in sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True):
+        if j.get("type") == job_type and j.get("status") == "running":
+            active = j
+            break
+    if active:
+        return jsonify({"running": True, "id": active.get("id")})
+    return jsonify({"running": False})
 
 
 if __name__ == "__main__":

@@ -147,7 +147,7 @@
 
     function setSpinning(on) {
       spinEls.forEach(el => el.style.display = on ? 'inline-block' : 'none');
-      submitBtn.disabled = on;
+      submitBtn.disabled = on ? true : submitBtn.disabled; // keep disabled if not allowed
     }
 
     function showAlert(kind, msg) {
@@ -162,6 +162,22 @@
       // value from datetime-local is already in local "YYYY-MM-DDTHH:mm"
       return dtValue ? dtValue + ':00' : null; // add seconds
     }
+
+    async function refreshPredictStatus() {
+      try {
+        const r = await fetch('/ops/active/predict');
+        if (!r.ok) throw new Error('status ' + r.status);
+        const { running } = await r.json();
+        submitBtn.disabled = !running;
+      } catch {
+        submitBtn.disabled = true;
+      }
+    }
+
+    // Initial state and periodic check
+    submitBtn.disabled = true;
+    refreshPredictStatus();
+    setInterval(refreshPredictStatus, 5000);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -237,6 +253,8 @@
       } finally {
         pollSpinner.style.display = 'none';
         setSpinning(false);
+        // Re-evaluate whether we can accept new requests
+        refreshPredictStatus();
       }
     });
 

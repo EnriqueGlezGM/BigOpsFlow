@@ -25,6 +25,8 @@ if [ "$?" -ne 0 ]; then
   python -m pip install --no-cache-dir 'numpy<2' >/dev/null 2>&1 || true
 fi
 
-papermill \
+PAPERMILL_BIN="/opt/conda/bin/papermill"
+if [ ! -x "$PAPERMILL_BIN" ]; then PAPERMILL_BIN="papermill"; fi
+"$PAPERMILL_BIN" \
   "/home/jovyan/Food_delivery/Analysis.ipynb" \
   "/home/jovyan/Food_delivery/Analysis.ipynb"

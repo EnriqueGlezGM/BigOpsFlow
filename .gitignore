@@ -10,20 +10,15 @@ lib/pymongo_spark.py
 elasticsearch
 elasticsearch-hadoop
 lib
-ch03/static
-ch06/web/static
 *.pyc
 tmp
 .idea
 kafka
 zeppelin
-ch05/scrape_faa.py
 models
 .vagrant
 *.pem
 .reservation_id
-.ec2_hostname
-.ec2_deep_hostname
 .deep_reservation_id
 deep/data
 .vscode
@@ -31,7 +26,6 @@ ghostdriver.log
 cassandra
 janusgraph
 deep
-ch05/web/static/images/
 .local
 .ipython
 .jupyter
@@ -43,3 +37,5 @@ ch05/web/static/images/
 .cache
 logs
 .wget-hsts
+Food_delivery/Analysis.ipynb
+Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb
