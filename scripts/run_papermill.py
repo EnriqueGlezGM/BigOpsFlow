@@ -67,12 +67,20 @@ def _script_path(name: str) -> str:
 
 
 def _launch_script(script_name: str):
+    job_type = "train" if script_name == "train.sh" else "predict"
+
+    # Evita lanzar duplicados: si ya hay un job en ejecución de este tipo, reutiliza su id
+    for j in jobs.values():
+        if j.get("type") == job_type and j.get("status") == "running":
+            return j["id"]
+
     job_id = str(uuid.uuid4())
     jobs[job_id] = {
         "id": job_id,
         "status": "queued",
         "created_at": datetime.utcnow().isoformat(timespec="seconds"),
         "log": "",
+        "type": job_type,
     }
     script = _script_path(script_name)
 

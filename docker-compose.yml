@@ -168,9 +168,13 @@ services:
                 condition: service_started
             mongo:
                 condition: service_started
+            agile:
+                condition: service_started
         environment:
             ELASTIC_URL: "http://elastic:9200"
             KIBANA_URL: "http://kibana:5601"
+            AUTO_RUN_TRAIN: "true"
+            AUTO_RUN_PREDICT: "true"
         ports:
             - "5050:5050"   
         restart: unless-stopped
