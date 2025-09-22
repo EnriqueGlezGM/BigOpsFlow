@@ -20,7 +20,7 @@ DATA_VIEW_TITLE="${DATA_VIEW_TITLE:-mydata_prediction_response*}"
 DATA_VIEW_NAME="${DATA_VIEW_NAME:-MyData Predictions}"
 TIME_FIELD_NAME="${TIME_FIELD_NAME:-@ingest_ts}"
 
-# Advanced settings Kibana (puedes ampliar la lista)
+# Ajustes avanzados de Kibana
 KIBANA_ADV_SETTINGS_JSON="${KIBANA_ADV_SETTINGS_JSON:-{\"theme:darkMode\":true}}"
 
 CURL_OPTS=(-sS --max-time 10)
@@ -209,7 +209,7 @@ ensure_kibana_dataview() {
 }
 
 # =========================================================
-# Run
+# Ejecución
 # =========================================================
 wait_for_es
 ensure_ingest_pipeline

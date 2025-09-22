@@ -8,7 +8,7 @@ export PYSPARK_PYTHON=python
 export PYSPARK_DRIVER_PYTHON=python
 export PYSPARK_SUBMIT_ARGS="--packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.6 pyspark-shell"
 
-# Asegura NumPy 1.x si la imagen trae 2.x
+# Asegurar NumPy 1.x si la imagen trae 2.x
 python - <<'PY'
 import sys
 try:

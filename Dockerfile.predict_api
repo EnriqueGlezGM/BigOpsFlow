@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# OS packages needed for bootstrapping ES/Kibana
+# Paquetes del SO necesarios para iniciar ES/Kibana
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl jq ca-certificates && \
     rm -rf /var/lib/apt/lists/*

@@ -21,29 +21,28 @@ KAFKA_REQUEST_TOPIC = "mydata_prediction_request"
 mongo = MongoClient("mongo", 27017)
 db = mongo["agile_data_science"]
 col_resp = db["mydata_prediction_response"]      # donde escribe Spark
-col_req  = db["mydata_prediction_requests"]      # opcional: para ver solicitudes
+col_req  = db["mydata_prediction_requests"]      # opcional: para ver depurar
 
 @app.route("/")
 def home():
-    # si usas templates: return render_template("form.html")
     return render_template("form.html")
 
 @app.route("/mydata/predict", methods=["POST"])
 def mydata_predict():
-    # Recoge datos del form (o JSON)
+    # Recoger datos del formulario (o JSON)
     payload = request.get_json() or request.form.to_dict()
 
-    # Asegura tipos y formato ISO en timestamps si vienen vacíos
+    # Asegurar tipos y formato ISO en timestamps si vienen vacíos
     def to_iso(x):
         if not x:
             return datetime.utcnow().isoformat(timespec="seconds")
         return x
 
-    # Genera UUID
+    # Generar UUID
     uid = str(uuid.uuid4())
     payload["UUID"] = uid
 
-    # (Opcional) normaliza tipos numéricos si llegan como string:
+    # Normalizar tipos numéricos si llegan como string
     ints  = [ "delivery_fee", "commission_fee", "payment_processing_fee"]
     floats = ["order_value", "refunds/chargebacks"]
     for k in ints:
@@ -53,17 +52,17 @@ def mydata_predict():
         if k in payload and payload[k] not in (None, ""):
             payload[k] = float(payload[k])
 
-    # timestamps
+    # Timestamps
     payload["order_date_and_time"] = to_iso(payload.get("order_date_and_time"))
     
 
-    # Guarda la solicitud (opcional, útil para auditoría)
+    # Guardar la solicitud
     try:
         col_req.insert_one({"UUID": uid, "request": payload, "status": "submitted", "ts": datetime.utcnow()})
     except Exception:
         pass
 
-    # Publica en Kafka
+    # Publicar en Kafka
     producer.send(KAFKA_REQUEST_TOPIC, payload)
     producer.flush()
 
@@ -71,16 +70,15 @@ def mydata_predict():
 
 @app.route("/mydata/predict/response/<uid>", methods=["GET"])
 def mydata_predict_response(uid):
-    # Busca en la colección donde Spark escribe la predicción
+    # Buscar en la colección donde Spark escribe la predicción
     doc = col_resp.find_one({"UUID": uid}, {"_id": 0})
     if doc:
-        # Ejemplo doc: { "UUID": "...", "prediction": 76.12 }
+        # Ejemplo de documento: { "UUID": "...", "prediction": 76.12 }
         return jsonify({"id": uid, "status": "done", **doc})
-    # Si no hay aún, devolvemos pending (HTTP 202)
+    # Si no hay aún, devolver "pending" (HTTP 202)
     return jsonify({"id": uid, "status": "pending"}), 202
 
-
-# ---- Operaciones: entrenar / predecir (vía microservicio en agile) ----
+# ---- Operaciones: entrenar / predecir (vía microservicio en el contenedor agile run_papermill.py) ----
 @app.route("/ops/train", methods=["POST"]) 
 def ops_train():
     try:
@@ -123,5 +121,5 @@ def ops_active(job_type):
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # Ejecuta Flask en el contenedor agile, expuesto en 5050 (ya mapeado en tu compose)
+    # Ejecutar Flask en el contenedor agile, expuesto en 5050 (mapeado en compose)
     app.run(host="0.0.0.0", port=5050, debug=True)

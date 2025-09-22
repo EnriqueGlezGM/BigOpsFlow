@@ -10,10 +10,10 @@ from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
-# In-memory job registry (simple and good enough for dev/demo)
+# registro de jobs
 jobs = {}
 
-# Feature flags via env
+# Flags de características vía variables de entorno
 AUTO_CHAIN_PREDICT = (os.environ.get("AUTO_CHAIN_PREDICT_AFTER_TRAIN", "true").lower() == "true")
 
 
@@ -22,7 +22,7 @@ def _run_job(job_id: str, cmd: str, cwd: Optional[str] = None):
     jobs[job_id]["started_at"] = datetime.utcnow().isoformat(timespec="seconds")
     jobs[job_id]["cmd"] = cmd
     try:
-        # Start process and capture combined stdout+stderr
+        # Iniciar el proceso y capturar stdout+stderr combinados
         proc = subprocess.Popen(
             cmd,
             cwd=cwd,
@@ -38,7 +38,7 @@ def _run_job(job_id: str, cmd: str, cwd: Optional[str] = None):
         if proc.stdout is not None:
             for line in proc.stdout:
                 log_lines.append(line)
-                # Keep last ~500 lines to avoid unbounded growth
+                # Mantener ~500 últimas líneas para evitar crecimiento ilimitado
                 if len(log_lines) > 500:
                     log_lines = log_lines[-500:]
                 jobs[job_id]["log"] = "".join(log_lines)
@@ -47,7 +47,7 @@ def _run_job(job_id: str, cmd: str, cwd: Optional[str] = None):
         jobs[job_id]["ended_at"] = datetime.utcnow().isoformat(timespec="seconds")
         jobs[job_id]["status"] = "done" if rc == 0 else "error"
         # Auto-encadenar: si el job terminado es de tipo 'train' y ha ido bien,
-        # asegúrate de que el streaming de predicción esté corriendo.
+        # asegurar que el streaming de predicción esté corriendo.
         try:
             if rc == 0 and jobs[job_id].get("type") == "train" and AUTO_CHAIN_PREDICT:
                 # ¿Hay ya un predict corriendo?
@@ -68,7 +68,6 @@ def _run_job(job_id: str, cmd: str, cwd: Optional[str] = None):
 
 
 def _make_env_exports() -> str:
-    # These envs are already present in the image, but keeping them explicit
     return (
         "export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64; "
         "export SPARK_HOME=/usr/local/spark; "
@@ -80,14 +79,14 @@ def _make_env_exports() -> str:
 
 
 def _script_path(name: str) -> str:
-    # Scripts are mounted at /scripts in the agile container
+# Los scripts se montan en /scripts en el contenedor agile
     return f"/scripts/{name}"
 
 
 def _launch_script(script_name: str):
     job_type = "train" if script_name == "train.sh" else "predict"
 
-    # Evita duplicados: si ya hay job encolado o ejecutándose de este tipo, reutiliza su id
+    # Evitar duplicados: si ya hay job encolado o ejecutándose de este tipo, reutilizar su id
     for j in jobs.values():
         if j.get("type") == job_type and j.get("status") in ("queued", "running"):
             return j["id"]
@@ -102,12 +101,12 @@ def _launch_script(script_name: str):
     }
     script = _script_path(script_name)
 
-    # Prefer running the script if present; fallback to inline papermill
+    # Preferir ejecutar el script si existe; si no, usar papermill en línea
     if os.path.exists(script):
-        # Ejecuta siempre vía bash para evitar depender del bit ejecutable del archivo
+        # Ejecutar siempre vía bash para evitar depender del bit ejecutable del archivo
         cmd = f"bash -lc 'bash {shlex.quote(script)}'"
     else:
-        # Fallback inline command (should not be needed if scripts exist)
+        # Comando en línea de respaldo (no debería ser necesario si existen los scripts)
         if script_name == "train.sh":
             cmd = (
                 f"bash -lc '{_make_env_exports()} papermill "
@@ -165,16 +164,16 @@ def healthz():
 
 @app.get("/jobs")
 def jobs_list():
-    # Return jobs ordered by created_at desc (best-effort)
+    # Devolver los jobs ordenados por created_at desc (best-effort)
     ordered = sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True)
     return jsonify({"count": len(ordered), "jobs": ordered[:50]})
 
 
 @app.get("/status/<job_type>")
 def status_by_type(job_type: str):
-    # Return whether there is an active running job of given type (e.g., 'predict' or 'train')
+    # Devolver si hay un job en ejecución activo del tipo dado (p. ej., 'predict' o 'train')
     active = None
-    # Prefer the most recently created running job
+    # Preferir el job en ejecución creado más recientemente
     for j in sorted(jobs.values(), key=lambda x: x.get("created_at", ""), reverse=True):
         if j.get("type") == job_type and j.get("status") == "running":
             active = j
@@ -185,5 +184,5 @@ def status_by_type(job_type: str):
 
 
 if __name__ == "__main__":
-    # Listen on 0.0.0.0:5000 (compose maps to host 5001)
+    # Escuchar en 0.0.0.0:5000 (compose lo mapea al host 5001)
     app.run(host="0.0.0.0", port=5000)

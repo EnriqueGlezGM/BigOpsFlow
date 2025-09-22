@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Orchestrates: wait for agile microservice -> run train -> wait done -> run predict
+# Orquestar: esperar al microservicio agile -> lanzar train -> esperar a que termine -> lanzar predict
 
 AGILE_BASE="http://localhost:5000"
 TOKEN_HEADER=""
@@ -19,18 +19,18 @@ wait_health() {
 }
 
 post_json() {
-  # $1: path
+  # $1: ruta
   curl -fsS -X POST ${TOKEN_HEADER} "${AGILE_BASE}$1"
 }
 
 get_json() {
-  # $1: path
+  # $1: ruta
   curl -fsS ${TOKEN_HEADER} "${AGILE_BASE}$1"
 }
 
 parse_json_field() {
-  # Read JSON from stdin and extract field via Python (jq may not be present)
-  # $1: field name
+  # Lee JSON desde stdin y extrae un campo con Python
+  # $1: nombre del campo
   python - "$1" <<'PY'
 import sys, json
 field = sys.argv[1]
@@ -40,14 +40,14 @@ PY
 }
 
 latest_job_id_by_type() {
-  # $1: type (train|predict)
+  # $1: tipo (train|predict)
   type="$1"
   get_json "/jobs" | python - "$type" <<'PY'
 import sys, json
 job_type = sys.argv[1]
 data = json.load(sys.stdin)
 jobs = data.get('jobs', [])
-for j in jobs:  # already ordered desc by server
+for j in jobs:  # ya está ordenado desc por el servidor
     if j.get('type') == job_type:
         print(j.get('id',''))
         break
@@ -74,7 +74,7 @@ main() {
   train_id=$(printf '%s' "${train_json}" | parse_json_field id || true)
   if [ -z "${train_id}" ]; then
     log "INFO: Attempting to detect latest train job id from /jobs ..."
-    # Give it a moment to register
+    # Dar un momento para que se registre
     sleep 1
     train_id=$(latest_job_id_by_type train || true)
   fi
@@ -84,14 +84,14 @@ main() {
     log "WARN: Could not determine a training job id. Will wait for any train job to finish by listing."
   fi
 
-  # Poll status until done/error
-  # Wait up to ~20 minutes (adjust as needed)
+  # Consultar el estado hasta terminar/error
+  # Esperar hasta ~20 minutos (ajusta si es necesario)
   max_tries=400
   tries=0
   while true; do
     sleep 3
     tries=$((tries+1))
-    # First preference: if we know the id, query it directly
+    # Preferencia: si conocemos el id, consultarlo directamente
     if [ -n "${train_id}" ]; then
       status_json=$(get_json "/jobs/${train_id}" || true)
       if [ -n "${status_json}" ]; then
@@ -107,7 +107,7 @@ main() {
         fi
       fi
     else
-      # Fallback: see if any train job appears and completes
+      # Alternativa: comprobar si aparece algún job de train y finaliza
       latest=$(latest_job_id_by_type train || true)
       if [ -n "$latest" ]; then
         train_id="$latest"
@@ -128,14 +128,14 @@ main() {
     pjson=$(post_json "/run-predict" || true)
     pid=$(printf '%s' "$pjson" | parse_json_field id || true)
     if [ -z "$pid" ]; then
-      # try to infer latest predict job id
+      # intentar inferir el último id de job predict
       sleep 1
       pid=$(latest_job_id_by_type predict || true)
     fi
     if [ -n "$pid" ]; then
       log "Predict job id: $pid"
     fi
-    # Verify running
+    # Verificar que esté en ejecución
     sleep 2
     sjson=$(get_json "/status/predict" || true)
     running=$(printf '%s' "$sjson" | parse_json_field running || true)
@@ -143,7 +143,7 @@ main() {
       log "Predict job is running."
       break
     fi
-    # Also check job state directly
+    # Comprobar también el estado del job directamente
     if [ -n "$pid" ]; then
       pstate=$(job_status_by_id "$pid" || true)
       [ -n "$pstate" ] && log "Predict state: $pstate"

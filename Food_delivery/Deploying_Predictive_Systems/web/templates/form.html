@@ -24,7 +24,6 @@
 
   <main class="container my-5">
     <div class="row g-4">
-      <!-- Operaciones automáticas: entrenamiento/streaming se disparan al arrancar -->
       <!-- Formulario -->
       <div class="col-12 col-lg-7">
         <div class="card shadow-sm">
@@ -36,7 +35,6 @@
 
             <form id="predictForm" novalidate>
               <div class="row g-3">
-                
 
                 <div class="col-12 col-md-6">
                   <label for="customer_id" class="form-label">Customer ID</label>
@@ -52,8 +50,6 @@
                   <label for="order_date_and_time" class="form-label">Order Date and Time</label>
                   <input type="datetime-local" class="form-control" id="order_date_and_time" value="2025-08-06T13:00" required>
                 </div>
-
-                
 
                 <div class="col-12 col-md-6">
                   <label for="order_value" class="form-label">Order Value</label>
@@ -129,7 +125,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script>
-    // ---- Theme toggle (light/dark) ----
+    // ---- Alternar tema (claro/oscuro) ----
     const themeToggle = document.getElementById('themeToggle');
     const htmlEl = document.documentElement;
     themeToggle?.addEventListener('change', () => {
@@ -150,7 +146,7 @@
 
     function setSpinning(on) {
       spinEls.forEach(el => el.style.display = on ? 'inline-block' : 'none');
-      submitBtn.disabled = on ? true : submitBtn.disabled; // keep disabled if not allowed
+      submitBtn.disabled = on ? true : submitBtn.disabled;
     }
 
     function showAlert(kind, msg) {
@@ -162,11 +158,11 @@
     }
 
     function toRFC3339Local(dtValue) {
-      // value from datetime-local is already in local "YYYY-MM-DDTHH:mm"
-      return dtValue ? dtValue + ':00' : null; // add seconds
+      // el valor de datetime-local ya está en horario local "YYYY-MM-DDTHH:mm"
+      return dtValue ? dtValue + ':00' : null; // añadir segundos
     }
 
-    // Bootstrap tooltip (requires JS bundle loaded below)
+    // Tooltip de Bootstrap (requiere el bundle JS cargado debajo)
     let submitTooltip;
     try { submitTooltip = new bootstrap.Tooltip(submitTooltipWrap); } catch {}
 
@@ -201,7 +197,7 @@
       }
     }
 
-    // Initial state and periodic check
+    // Estado inicial y comprobación periódica
     submitBtn.disabled = true;
     refreshPredictStatus();
     setInterval(refreshPredictStatus, 5000);
@@ -217,7 +213,7 @@
       predictionLine.textContent = '';
       rawDoc.textContent = '{}';
 
-      // Construimos el JSON exactamente como espera Spark (nombres y tipos)
+      // Construir el JSON exactamente como lo espera Spark (nombres y tipos)
       const payload = {
         customer_id: document.getElementById('customer_id').value,
         restaurant_id: document.getElementById('restaurant_id').value,
@@ -244,7 +240,7 @@
         uuidLine.textContent = 'UUID: ' + uuid;
         statusBadge.textContent = 'procesando…';
 
-        // Polling al backend (que a su vez mira Mongo) hasta 30s
+        // Consultar al backend hasta 60s (60000ms)
         const started = Date.now();
         const timeoutMs = 60000;
         let done = false;
@@ -256,14 +252,14 @@
             showAlert('warning', 'No llegó respuesta en 60s. Revisa que el job de Spark esté ejecutándose y Kafka/Mongo estén activos.');
             break;
           }
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 1000)); // 1 consulta/segundo
 
           const r = await fetch('/mydata/predict/response/' + encodeURIComponent(uuid));
           if (r.status === 404) continue; // aún no hay doc
           if (!r.ok) throw new Error('Error al consultar respuesta: ' + r.status);
           const doc = await r.json();
 
-          // Esperamos un documento con al menos { UUID, prediction }
+          // Esperar un documento con al menos { UUID, prediction }
           if (doc && (doc.prediction !== undefined)) {
             done = true;
             statusBadge.className = 'badge text-bg-success';
@@ -280,7 +276,7 @@
       } finally {
         pollSpinner.style.display = 'none';
         setSpinning(false);
-        // Re-evaluate whether we can accept new requests
+        // Reevaluar si se pueden aceptar nuevas solicitudes
         refreshPredictStatus();
       }
     });
@@ -293,6 +289,5 @@
 
     // Operaciones se gestionan en el arranque del backend; UI sin botones
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
