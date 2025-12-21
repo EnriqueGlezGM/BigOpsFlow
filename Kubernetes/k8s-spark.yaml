@@ -1,0 +1,1102 @@
+# Nota: Renderiza este fichero con envsubst para resolver solo ${BASE_DIR}, ej.:
+#   BASE_DIR=$(pwd) envsubst '${BASE_DIR}' < k8s-spark.yaml | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: models-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    namespace: spark
+    name: models-pvc
+  hostPath:
+    path: ${BASE_DIR}/models
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spark
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+  namespace: spark
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-master
+  namespace: spark
+  labels: { app: spark, component: master }
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector: { matchLabels: { app: spark, component: master } }
+  template:
+    metadata: { labels: { app: spark, component: master } }
+    spec:
+      securityContext:
+        fsGroup: 185
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: init-models
+          image: busybox:1.36
+          command: ["/bin/sh","-c"]
+          args: ["mkdir -p /models /models/.pylibs /models/scripts && chown -R 185:185 /models || true && chmod -R 0777 /models || true"]
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+      volumes:
+        - name: models-vol
+          persistentVolumeClaim:
+            claimName: models-pvc
+        - name: spark-work
+          emptyDir: {}
+      containers:
+        - name: spark-master
+          image: spark:4.0.1-py
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SPARK_NO_DAEMONIZE
+              value: "true"
+            - name: SPARK_LOG_DIR
+              value: /tmp
+            - name: JAVA_HOME
+              value: /opt/java/openjdk
+            - name: PYSPARK_PYTHON
+              value: /usr/bin/python3
+            - name: PYSPARK_DRIVER_PYTHON
+              value: /usr/bin/python3
+            - name: SPARK_MASTER_HOST
+              value: 0.0.0.0
+            - name: SPARK_MASTER_PORT
+              value: "7077"
+            - name: SPARK_MASTER_WEBUI_PORT
+              value: "8080"
+            - name: SPARK_PUBLIC_DNS
+              value: spark-master-svc
+            - name: SPARK_PID_DIR
+              value: /tmp
+            - name: HADOOP_USER_NAME
+              value: spark
+            - name: SPARK_USER
+              value: spark
+          securityContext:
+            runAsUser: 185
+            runAsGroup: 185
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+            - name: spark-work
+              mountPath: /opt/spark/work
+          args: ["/opt/spark/sbin/start-master.sh"]
+          ports:
+            - containerPort: 7077
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 7077 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-master-svc
+  namespace: spark
+spec:
+  type: NodePort
+  selector: { app: spark, component: master }
+  ports:
+    - name: spark
+      port: 7077
+      targetPort: 7077
+      nodePort: 30077
+    - name: webui
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-worker
+  namespace: spark
+  labels: { app: spark, component: worker }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: spark, component: worker } }
+  template:
+    metadata: { labels: { app: spark, component: worker } }
+    spec:
+      securityContext:
+        fsGroup: 185
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: init-models
+          image: busybox:1.36
+          command: ["/bin/sh","-c"]
+          args: ["mkdir -p /models /models/.pylibs /models/scripts && chown -R 185:185 /models || true && chmod -R 0777 /models || true"]
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+      volumes:
+        - name: models-vol
+          persistentVolumeClaim:
+            claimName: models-pvc
+        - name: spark-work
+          emptyDir: {}
+      containers:
+        - name: spark-worker
+          image: spark:4.0.1-py
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SPARK_NO_DAEMONIZE
+              value: "true"
+            - name: SPARK_LOG_DIR
+              value: /tmp
+            - name: JAVA_HOME
+              value: /opt/java/openjdk
+            - name: PYSPARK_PYTHON
+              value: /usr/bin/python3
+            - name: SPARK_WORKER_MEMORY
+              value: 3g
+            - name: SPARK_WORKER_CORES
+              value: "2"
+            - name: SPARK_PID_DIR
+              value: /tmp
+            - name: SPARK_WORKER_DIR
+              value: /tmp/spark-worker
+            - name: HADOOP_USER_NAME
+              value: spark
+            - name: SPARK_USER
+              value: spark
+          securityContext:
+            runAsUser: 185
+            runAsGroup: 185
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+            - name: spark-work
+              mountPath: /opt/spark/work
+          args: ["/opt/spark/sbin/start-worker.sh", "spark://spark-master-svc:7077"]
+          ports:
+            - containerPort: 8081
+          readinessProbe:
+            httpGet: { path: /, port: 8081 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: models-fix-perms
+  namespace: spark
+spec:
+  ttlSecondsAfterFinished: 120
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: fixer
+          image: busybox:1.36
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              echo "[fixer] setting ownership and permissions..." &&
+              chown -R 185:185 /models || true &&
+              chmod -R 0777 /models || true &&
+              mkdir -p /models/gbt /models/.pylibs /models/scripts &&
+              chmod 0777 /models/gbt /models/.pylibs &&
+              echo "[fixer] done."
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+      volumes:
+        - name: models-vol
+          persistentVolumeClaim:
+            claimName: models-pvc
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: spark-submit-train
+  namespace: spark
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: submit
+          image: spark:4.0.1-py
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - name: SPARK_LOCAL_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              /opt/spark/bin/spark-submit
+              --master spark://spark-master-svc:7077
+              --conf spark.driver.bindAddress=0.0.0.0
+              --conf spark.driver.host=$SPARK_LOCAL_IP
+              --conf spark.driver.port=32001
+              --conf spark.blockManager.port=32002
+              --conf spark.ui.port=4041
+              --conf spark.dynamicAllocation.enabled=false
+              --conf spark.cores.max=2
+              --conf spark.executor.cores=1
+              --conf spark.executor.memory=2g
+              --conf spark.executor.memoryOverhead=512m
+              --conf spark.driver.memory=2g
+              /code/train_gbt.py
+              --data /models/data/dataset.csv
+              --out  /models/gbt/pipeline_model
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+            - name: models-vol
+              mountPath: /code
+              subPath: scripts
+      volumes:
+        - name: models-vol
+          persistentVolumeClaim:
+            claimName: models-pvc
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    namespace: spark
+    name: mongo-pvc
+  hostPath:
+    path: ${BASE_DIR}/data/mongo
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+  namespace: spark
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: spark
+  labels: { app: mongo }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mongo } }
+  template:
+    metadata: { labels: { app: mongo } }
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: init-mongo
+          image: busybox:1.36
+          command: ["/bin/sh","-c"]
+          args: ["mkdir -p /data/db && chown -R 1000:1000 /data/db || true && chmod -R 0777 /data/db || true"]
+          volumeMounts:
+            - name: mongo-vol
+              mountPath: /data/db
+      volumes:
+        - name: mongo-vol
+          persistentVolumeClaim:
+            claimName: mongo-pvc
+      containers:
+        - name: mongo
+          image: mongo:5.0.3
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongo-vol
+              mountPath: /data/db
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+          readinessProbe:
+            tcpSocket: { port: 27017 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: spark
+spec:
+  type: ClusterIP
+  selector: { app: mongo }
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-express
+  namespace: spark
+  labels: { app: mongo-express }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mongo-express } }
+  template:
+    metadata: { labels: { app: mongo-express } }
+    spec:
+      containers:
+        - name: mongo-express
+          image: mongo-express:0.54.0
+          env:
+            - name: ME_CONFIG_MONGODB_URL
+              value: mongodb://mongo:27017/
+          ports:
+            - containerPort: 8081
+          readinessProbe:
+            httpGet: { path: "/", port: 8081 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-express
+  namespace: spark
+spec:
+  type: NodePort
+  selector: { app: mongo-express }
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+      nodePort: 30881
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: elastic-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    namespace: spark
+    name: elastic-pvc
+  hostPath:
+    path: ${BASE_DIR}/data/elastic
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elastic-pvc
+  namespace: spark
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elastic
+  namespace: spark
+  labels: { app: elastic }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: elastic } }
+  template:
+    metadata: { labels: { app: elastic } }
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: init-elastic
+          image: busybox:1.36
+          command: ["/bin/sh","-c"]
+          args: ["mkdir -p /usr/share/elasticsearch/data && chown -R 1000:0 /usr/share/elasticsearch/data || true && chmod -R 0777 /usr/share/elasticsearch/data || true"]
+          volumeMounts:
+            - name: elastic-vol
+              mountPath: /usr/share/elasticsearch/data
+      volumes:
+        - name: elastic-vol
+          persistentVolumeClaim:
+            claimName: elastic-pvc
+      containers:
+        - name: elastic
+          image: docker.elastic.co/elasticsearch/elasticsearch:9.1.2
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: cluster.name
+              value: es-docker
+            - name: node.name
+              value: elastic
+            - name: xpack.security.enabled
+              value: "false"
+            - name: xpack.security.enrollment.enabled
+              value: "false"
+            - name: xpack.security.http.ssl.enabled
+              value: "false"
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx512m"
+          ports:
+            - containerPort: 9200
+            - containerPort: 9300
+          volumeMounts:
+            - name: elastic-vol
+              mountPath: /usr/share/elasticsearch/data
+          readinessProbe:
+            httpGet: { path: /_cluster/health, port: 9200 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "250m", memory: "1Gi" }
+            limits: { cpu: "2", memory: "2Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elastic
+  namespace: spark
+spec:
+  type: LoadBalancer
+  selector: { app: elastic }
+  ports:
+    - name: http
+      port: 9200
+      targetPort: 9200
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: spark
+data:
+  kibana.yml: |
+    server.host: "0.0.0.0"
+    elasticsearch.hosts: ["http://elastic:9200"]
+    telemetry.enabled: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: spark
+  labels: { app: kibana }
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector: { matchLabels: { app: kibana } }
+  template:
+    metadata: { labels: { app: kibana } }
+    spec:
+      terminationGracePeriodSeconds: 10
+      initContainers:
+        - name: wait-for-elastic
+          image: curlimages/curl:8.10.1
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              echo "[kibana-init] Waiting for Elasticsearch at http://elastic:9200 ..." ;
+              until curl -sS http://elastic:9200/_cluster/health?wait_for_status=yellow&amp;timeout=1s >/dev/null; do
+                echo "[kibana-init] still waiting..." ;
+                sleep 3 ;
+              done ;
+              echo "[kibana-init] Elasticsearch is up."
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana:9.1.2
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=1024"
+          ports:
+            - containerPort: 5601
+          readinessProbe:
+            httpGet: { path: /api/status, port: 5601 }
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/status, port: 5601 }
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "2Gi" }
+          volumeMounts:
+            - name: kibana-config
+              mountPath: /usr/share/kibana/config/kibana.yml
+              subPath: kibana.yml
+      volumes:
+        - name: kibana-config
+          configMap: { name: kibana-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: spark
+spec:
+  type: NodePort
+  selector: { app: kibana }
+  ports:
+    - name: http
+      port: 5601
+      targetPort: 5601
+      nodePort: 30601
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kibana-create-dataview
+  namespace: spark
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: create-dataview
+          image: curlimages/curl:8.10.1
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KIBANA_URL
+              value: http://kibana:5601
+            - name: ES_URL
+              value: http://elastic:9200
+            - name: INDEX_PATTERN
+              value: mydata_prediction_response*
+            - name: DATA_VIEW_ID
+              value: mydata_prediction_response
+            - name: DATA_VIEW_NAME
+              value: MyData Prediction
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              set -e;
+              echo "[dv] waiting for Kibana at $KIBANA_URL...";
+              for i in $(seq 1 60); do
+                if curl -sS "$KIBANA_URL/api/status" >/dev/null 2>&1; then
+                  break;
+                fi;
+                echo "[dv] still waiting ($i)...";
+                sleep 5;
+              done;
+              echo "[dv] creating data view id=$DATA_VIEW_ID title=$INDEX_PATTERN...";
+              curl -sS -f -X POST "$KIBANA_URL/api/data_views/data_view" \
+                -H 'kbn-xsrf: true' \
+                -H 'Content-Type: application/json' \
+                -d "{\"data_view\":{\"id\":\"$DATA_VIEW_ID\",\"title\":\"$INDEX_PATTERN\",\"name\":\"$DATA_VIEW_NAME\",\"timeFieldName\":\"@timestamp\"}}";
+              echo "[dv] done.";
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  namespace: spark
+  labels: { app: kafka }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: kafka } }
+  template:
+    metadata: { labels: { app: kafka } }
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:3.7.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka:9092"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@localhost:9093"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms512m -Xmx512m"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_CLUSTER_ID
+              value: "MkU3OEVBNTcwNTJENDM2Qk"
+          readinessProbe:
+            tcpSocket: { port: 9092 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+      volumes:
+        - name: kafka-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: spark
+spec:
+  selector: { app: kafka }
+  ports:
+    - name: plaintext
+      port: 9092
+      targetPort: 9092
+    - name: controller
+      port: 9093
+      targetPort: 9093
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-app
+  namespace: spark
+data:
+  app.py: |
+    import os, json, time, urllib.request, urllib.error
+    from uuid import uuid4
+    from typing import Any, Dict, Optional
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from kafka import KafkaProducer, KafkaConsumer
+
+    app = FastAPI()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+    REQUEST_TOPIC = os.getenv("REQUEST_TOPIC", "mydata_prediction_request")
+    RESPONSE_TOPIC = os.getenv("RESPONSE_TOPIC", "mydata_prediction_response")
+
+    producer = KafkaProducer(
+        bootstrap_servers=BOOTSTRAP,
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        key_serializer=lambda k: (k or "").encode("utf-8"),
+        linger_ms=0,
+    )
+
+
+    def await_response(key: str, timeout_sec: float = 10.0) -> Optional[Dict[str, Any]]:
+        """Espera en Kafka al mensaje de respuesta con la misma key."""
+        consumer = KafkaConsumer(
+            RESPONSE_TOPIC,
+            bootstrap_servers=BOOTSTRAP,
+            auto_offset_reset="latest",
+            enable_auto_commit=False,
+            consumer_timeout_ms=int(timeout_sec * 1000),
+            group_id=f"predict-sync-{uuid4()}",
+            value_deserializer=lambda v: json.loads(v.decode("utf-8")),
+            key_deserializer=lambda k: k.decode("utf-8") if k else None,
+        )
+        deadline = time.time() + timeout_sec
+        try:
+            while time.time() < deadline:
+                polled = consumer.poll(timeout_ms=500)
+                for records in polled.values():
+                    for rec in records:
+                        if rec.key == key:
+                            return rec.value
+            return None
+        finally:
+            consumer.close()
+
+    @app.get("/healthz")
+    def healthz():
+        return {"ok": True}
+
+    @app.post("/predict")
+    async def predict(payload: Dict[str, Any]):
+        try:
+            key = payload.get("UUID") or ""
+            producer.send(REQUEST_TOPIC, key=key, value=payload)
+            producer.flush()
+            return {"status": "queued", "topic": REQUEST_TOPIC, "key": key}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.post("/predict-sync")
+    def predict_sync(payload: Dict[str, Any]):
+        """
+        Encola la petición y espera una respuesta en Kafka (RESPONSE_TOPIC) con la misma UUID.
+        Timeout de ~60s.
+        """
+        try:
+            key = payload.get("UUID") or f"req-{uuid4()}"
+            producer.send(REQUEST_TOPIC, key=key, value=payload)
+            producer.flush()
+
+            resp = await_response(key, timeout_sec=60.0)
+            if resp is None:
+                return {"status": "queued", "key": key, "detail": "sin respuesta en 60s"}
+            return {
+                "status": "ok",
+                "key": key,
+                "prediction": resp.get("prediction"),
+                "result": resp,
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+    @app.get("/ready")
+    def ready():
+        """
+        Comprueba si el job de streaming (spark-stream-predict) está vivo consultando su UI.
+        """
+        try:
+            url = "http://spark-stream-predict:4042/api/v1/applications"
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            ok = False
+            if isinstance(data, list):
+                ok = any("analysis" in (app.get("name","").lower()) or "predict" in (app.get("name","").lower()) for app in data)
+            return {"ok": ok, "apps": data}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predict-ingest
+  namespace: spark
+  labels: { app: predict-ingest }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: predict-ingest } }
+  template:
+    metadata: { labels: { app: predict-ingest } }
+    spec:
+      containers:
+        - name: api
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KAFKA_BOOTSTRAP
+              value: "kafka:9092"
+            - name: REQUEST_TOPIC
+              value: "mydata_prediction_request"
+            - name: PYTHONPATH
+              value: /app
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              pip install --no-cache-dir fastapi==0.121.2 uvicorn==0.38.0 kafka-python==2.2.15 &&
+              exec uvicorn app:app --host 0.0.0.0 --port 5050 --app-dir /app
+          ports:
+            - containerPort: 5050
+          readinessProbe:
+            httpGet: { path: /healthz, port: 5050 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: app
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app
+          configMap:
+            name: ingest-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: predict-ingest
+  namespace: spark
+spec:
+  type: LoadBalancer
+  selector: { app: predict-ingest }
+  ports:
+    - name: http
+      port: 5050
+      targetPort: 5050
+      nodePort: 30550
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: predict-web
+  namespace: spark
+  labels: { app: predict-web }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: predict-web } }
+  template:
+    metadata: { labels: { app: predict-web } }
+    spec:
+      containers:
+        - name: web
+          image: nginx:1.25-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: web-content
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: web-content
+          configMap:
+            name: predict-web
+            items:
+              - key: index.html
+                path: index.html
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: predict-web
+  namespace: spark
+spec:
+  type: NodePort
+  selector: { app: predict-web }
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30060
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-stream-predict
+  namespace: spark
+  labels: { app: spark, component: stream-predict }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: spark, component: stream-predict } }
+  template:
+    metadata: { labels: { app: spark, component: stream-predict } }
+    spec:
+      securityContext:
+        fsGroup: 185
+        fsGroupChangePolicy: OnRootMismatch
+      initContainers:
+        - name: init-models
+          image: busybox:1.36
+          command: ["/bin/sh","-c"]
+          args: ["mkdir -p /models/gbt /models/checkpoints /models/.pylibs /models/.ivy2 /models/scripts && chown -R 185:185 /models || true && chmod -R 0777 /models || true"]
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+        - name: wait-kafka
+          image: busybox:1.36
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              echo "[wait-kafka] Waiting for kafka:9092...";
+              until nc -z -w 1 kafka 9092; do
+                echo "[wait-kafka] still waiting...";
+                sleep 2;
+              done;
+              echo "[wait-kafka] Kafka is reachable."
+        - name: check-model
+          image: busybox:1.36
+          env:
+            - name: MODEL_DIR
+              value: "/models/gbt/pipeline_model"
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              ALT="${MODEL_DIR%/*}/best_pipeline";
+              TARGET="${MODEL_DIR}";
+              echo "[check-model] waiting for model at $TARGET (alt $ALT)";
+              echo "[check-model] model env MODEL_DIR=$MODEL_DIR";
+              for i in $(seq 1 60); do
+                if [ -d "$TARGET" ] || [ -d "$ALT" ]; then
+                  if [ ! -d "$TARGET" ] && [ -d "$ALT" ]; then
+                    echo "[check-model] creating symlink $TARGET -> $ALT";
+                    ln -s "$ALT" "$TARGET" || true;
+                  fi;
+                  echo "[check-model] directory listing:";
+                  ls -l "$TARGET" || true;
+                  echo "[check-model] model ready.";
+                  exit 0;
+                fi;
+                echo "[check-model] attempt $i/60: model not found yet, sleeping 5s...";
+                sleep 5;
+              done;
+              echo "[check-model] ERROR: model not found after 5 minutes";
+              echo "[check-model] Hint: ensure training has written the model to $TARGET or $ALT";
+              exit 1;
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+      volumes:
+        - name: models-vol
+          persistentVolumeClaim:
+            claimName: models-pvc
+      containers:
+        - name: submit
+          image: spark:4.0.1-py
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - name: SPARK_LOCAL_IP
+              valueFrom: { fieldRef: { fieldPath: status.podIP } }
+            - name: MODEL_DIR
+              value: "/models/gbt/pipeline_model"
+            - name: CHECKPOINT_DIR
+              value: "/models/checkpoints/prediction-v1"
+            - name: PYTHONPATH
+              value: "/models/.pylibs"
+            - name: SPARK_SUBMIT_OPTS
+              value: "-Dspark.jars.ivy=/models/.ivy2 -Duser.home=/models"
+            - name: HOME
+              value: "/models"
+            - name: IVY_HOME
+              value: "/models/.ivy2"
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Duser.home=/models"
+            - name: KAFKA_BOOTSTRAP
+              value: "kafka:9092"
+            - name: REQUEST_TOPIC
+              value: "mydata_prediction_request"
+            - name: RESPONSE_TOPIC
+              value: "mydata_prediction_response"
+            - name: MONGO_URI
+              value: "mongodb://mongo:27017"
+            - name: MONGO_DB
+              value: "agile_data_science"
+            - name: MONGO_COLL
+              value: "mydata_prediction_response"
+            - name: ELASTIC_URL
+              value: "http://elastic:9200"
+            - name: ELASTIC_INDEX
+              value: "mydata_prediction_response"
+          command: ["/bin/sh","-lc"]
+          args:
+            - >
+              python -m pip install --no-cache-dir -q -t /models/.pylibs kafka-python pymongo requests || echo '[WARN] pip failed';
+              export PYTHONPATH=/models/.pylibs:$PYTHONPATH;
+              echo "[submit] MODEL_DIR=$MODEL_DIR CHECKPOINT_DIR=$CHECKPOINT_DIR";
+              echo "[submit] Starting spark-stream-predict...";
+              /opt/spark/bin/spark-submit
+              --master spark://spark-master-svc:7077
+              --conf spark.driver.bindAddress=0.0.0.0
+              --conf spark.driver.host=$SPARK_LOCAL_IP
+              --conf spark.driver.port=32011
+              --conf spark.blockManager.port=32012
+              --conf spark.ui.port=4042
+              --conf spark.dynamicAllocation.enabled=false
+              --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.1,org.apache.spark:spark-token-provider-kafka-0-10_2.13:4.0.1
+              --conf spark.cores.max=2
+              --conf spark.executor.cores=1
+              --conf spark.executor.memory=2g
+              --conf spark.executor.memoryOverhead=512m
+              --conf spark.driver.memory=2g
+              --conf spark.executorEnv.PYTHONPATH=/models/.pylibs
+              --conf spark.executorEnv.KAFKA_BOOTSTRAP=$KAFKA_BOOTSTRAP
+              --conf spark.executorEnv.REQUEST_TOPIC=$REQUEST_TOPIC
+              --conf spark.executorEnv.MONGO_URI=$MONGO_URI
+              --conf spark.executorEnv.MONGO_DB=$MONGO_DB
+              --conf spark.executorEnv.MONGO_COLL=$MONGO_COLL
+              --conf spark.executorEnv.ELASTIC_URL=$ELASTIC_URL
+              --conf spark.executorEnv.ELASTIC_INDEX=$ELASTIC_INDEX
+              /code/prediction.py
+          ports:
+            - containerPort: 4042
+            - containerPort: 32011
+            - containerPort: 32012
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+            - name: models-vol
+              mountPath: /code
+              subPath: scripts
+          readinessProbe:
+            tcpSocket: { port: 4042 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-stream-predict
+  namespace: spark
+spec:
+  type: NodePort
+  selector: { app: spark, component: stream-predict }
+  ports:
+    - name: ui
+      port: 4042
+      targetPort: 4042
+      nodePort: 30442
