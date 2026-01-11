@@ -7,6 +7,19 @@ Pipeline de prediccion en tiempo real para Food Delivery. Entrena un modelo en S
 UI/API -> Kafka (request) -> Spark Streaming -> Kafka (response) -> MongoDB + Elasticsearch -> UI/Kibana
 ```
 
+## Versiones Principales
+
+| Componente | Versión | Notas |
+|---|---|---|
+| Spark | 3.5.6 (Compose) / 4.0.1 (K8s) | Streaming + ML |
+| Python | 3.10 (Compose) / 3.13 (K8s) | En contenedores |
+| MongoDB | 5.0.3 | Persistencia predictions |
+| Elasticsearch | 9.1.2 | Analytics + Kibana |
+| Kafka | 3.6 | Event streaming |
+| Flask | 2.3.x | Web API |
+
+Para detalles específicos de cada método de despliegue, ver `Compose/README.md` o `Kubernetes/README.md`.
+
 ## Opciones de despliegue
 | | Docker Compose | Kubernetes |
 | --- | --- | --- |

@@ -1,5 +1,6 @@
-# Parte de la imagen original de Agile Data Science
-FROM rjurney/agile_data_science:latest
+# Parte de la imagen original de Agile Data Science (2021-10-26)
+# Usando digest para garantizar reproducibilidad y evitar cambios inesperados
+FROM rjurney/agile_data_science@sha256:d7b4e9787fe4d44046a4d6d39116546e3911cf93251a864ce5d221f76ec78042
 
 USER root
 

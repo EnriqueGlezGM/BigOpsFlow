@@ -37,4 +37,4 @@ deep
 .cache
 logs
 .wget-hsts
-NOTAS
+.github/NOTAS.md

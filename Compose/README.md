@@ -22,6 +22,25 @@ Pipeline de predicción en tiempo real con:
   - Kibana: `5601`
   - Spark Master UI: `8080`
 
+## Versiones del Stack Docker Compose
+
+| Componente | Versión | Fuente |
+|---|---|---|
+| **Base Agile** | sha256 (2021-10-26) | rjurney/agile_data_science@sha256 |
+| **Python** | 3.10 | Heredado de base Agile |
+| **Spark** | 3.5.6 | Custom build (Hadoop 3) |
+| **Java** | openjdk-17-jdk | Requerido para Spark 3.5.6 |
+| **Elasticsearch** | 9.1.2 | docker.elastic.co/elasticsearch |
+| **Kafka** | 3.6 | bitnami/kafka:3.6 |
+| **Kibana** | 9.1.2 | Compatible con ES 9.1.2 |
+| **MongoDB** | 5.0.3 | mongo:5.0.3 |
+| **Mongo Express** | 0.54.0 | mongo-express:0.54.0 |
+| **Flask** | 2.3.x | requirements.txt |
+| **pyspark** | 3.5.6 | requirements.txt |
+| **pymongo** | 4.6.1 | requirements.txt |
+| **kafka-python** | 2.0.2 | requirements.txt |
+| **numpy** | 1.26.4 | Pinned en Dockerfile.agile |
+
 ---
 
 ## Servicios

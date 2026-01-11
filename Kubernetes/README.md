@@ -1,3 +1,19 @@
+## Versiones del Stack Kubernetes
+
+| Componente | Versión | Notas |
+|---|---|---|
+| **Base Spark** | spark:4.0.1 | Imagen oficial Apache Spark |
+| **Python** | 3.13 | Con micromamba (conda-forge) |
+| **pyspark** | 4.0.1 | conda-forge |
+| **pandas** | Latest (conda) | conda-forge |
+| **pyarrow** | Latest (conda) | conda-forge |
+| **Spark Custom Image** | spark:4.0.1-py | Build local con Python 3.13 |
+| **Kubernetes** | 1.25+ | Cluster K8s |
+
+Ver `k8s-spark.yaml` para configuración de PersistentVolumes y namespace `spark`.
+
+---
+
 ## Limpieza total
 
 Si quieres borrar todo (namespace + PVs + datos locales):
