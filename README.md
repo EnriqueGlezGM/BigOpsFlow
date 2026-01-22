@@ -1,5 +1,4 @@
 # BigOpsFlow
-
 Pipeline de prediccion en tiempo real para Food Delivery. Entrena un modelo en Spark y sirve resultados por streaming con trazabilidad en bases de datos y analitica.
 
 ## Flujo de datos
