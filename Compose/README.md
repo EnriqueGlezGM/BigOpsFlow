@@ -1,3 +1,6 @@
+[![Python](https://img.shields.io/badge/Python-3.10-blue?style=flat-square&logo=python&logoColor=white)](https://python.org/) [![Spark](https://img.shields.io/badge/Spark-3.5.6-orange?style=flat-square&logo=apachespark&logoColor=white)](https://spark.apache.org/) [![MongoDB](https://img.shields.io/badge/MongoDB-5.0.3-green?style=flat-square&logo=mongodb&logoColor=white)](https://mongodb.com/) [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-9.1.2-yellow?style=flat-square&logo=elasticsearch&logoColor=black)](https://elastic.co/) [![Kibana](https://img.shields.io/badge/Kibana-9.1.2-pink?style=flat-square&logo=kibana&logoColor=black)](https://elastic.co/) [![Kafka](https://img.shields.io/badge/Kafka-3.6-black?style=flat-square&logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
+[![Flask](https://img.shields.io/badge/Flask-2.3.x-black?style=flat-square&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+
 # Food Delivery – Streaming Predictions
 
 Pipeline de predicción en tiempo real con:
@@ -22,24 +25,7 @@ Pipeline de predicción en tiempo real con:
   - Kibana: `5601`
   - Spark Master UI: `8080`
 
-## Versiones del Stack Docker Compose
 
-| Componente | Versión | Fuente |
-|---|---|---|
-| **Base Agile** | sha256 (2021-10-26) | rjurney/agile_data_science@sha256 |
-| **Python** | 3.10 | Heredado de base Agile |
-| **Spark** | 3.5.6 | Custom build (Hadoop 3) |
-| **Java** | openjdk-17-jdk | Requerido para Spark 3.5.6 |
-| **Elasticsearch** | 9.1.2 | docker.elastic.co/elasticsearch |
-| **Kafka** | 3.6 | bitnami/kafka:3.6 |
-| **Kibana** | 9.1.2 | Compatible con ES 9.1.2 |
-| **MongoDB** | 5.0.3 | mongo:5.0.3 |
-| **Mongo Express** | 0.54.0 | mongo-express:0.54.0 |
-| **Flask** | 2.3.x | requirements.txt |
-| **pyspark** | 3.5.6 | requirements.txt |
-| **pymongo** | 4.6.1 | requirements.txt |
-| **kafka-python** | 2.0.2 | requirements.txt |
-| **numpy** | 1.26.4 | Pinned en Dockerfile.agile |
 
 ---
 
