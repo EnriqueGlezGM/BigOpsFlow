@@ -5,6 +5,18 @@ Ver `k8s-spark.yaml` para configuración de PersistentVolumes y namespace `spark
 
 ---
 
+## Docker Desktop
+
+Este despliegue esta probado con Kubernetes de Docker Desktop. Segun la version
+o la configuracion, Docker Desktop puede indicar modo `kubeadm` o `kind`:
+
+```bash
+docker desktop kubernetes status
+```
+
+Usa `kubectl` para comprobar el stack. `docker ps` no siempre refleja los pods
+igual en todos los modos de Docker Desktop.
+
 ## Limpieza total
 
 Si quieres borrar todo (namespace + PVs + datos locales):
@@ -15,6 +27,10 @@ Si quieres borrar todo (namespace + PVs + datos locales):
 
 Esto elimina el namespace `spark`, los PVs (`models-pv`, `mongo-pv`, `elastic-pv`) y limpia directorios locales:
 `models/gbt`, `models/checkpoints`, `data`, `models/jars`, `models/.ivy2*`, `models/.pylibs`.
+
+La carpeta `data` esta ignorada por git porque contiene datos locales de Mongo
+y Elasticsearch. `apply-stack.sh` recrea `data/mongo` y `data/elastic` antes de
+aplicar los manifiestos.
 
 ## Despliegue
 
