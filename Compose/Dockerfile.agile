@@ -5,7 +5,8 @@ FROM rjurney/agile_data_science@sha256:d7b4e9787fe4d44046a4d6d39116546e3911cf932
 USER root
 
 # 1) Java 17 (requerido por Spark 3.5.x)
-RUN apt-get update && \
+RUN rm -f /etc/apt/sources.list.d/mongodb-org*.list && \
+    apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jdk curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
@@ -16,7 +17,7 @@ ENV PATH="$JAVA_HOME/bin:${PATH}"
 ARG SPARK_VER=3.5.6
 ARG HADOOP_PROFILE=hadoop3
 RUN mkdir -p /usr/local && \
-    curl -fsSL "https://downloads.apache.org/spark/spark-${SPARK_VER}/spark-${SPARK_VER}-bin-${HADOOP_PROFILE}.tgz" \
+    curl -fsSL "https://archive.apache.org/dist/spark/spark-${SPARK_VER}/spark-${SPARK_VER}-bin-${HADOOP_PROFILE}.tgz" \
     | tar -xz -C /usr/local && \
     ln -sfn "/usr/local/spark-${SPARK_VER}-bin-${HADOOP_PROFILE}" /usr/local/spark
 
@@ -30,7 +31,18 @@ RUN /opt/conda/bin/pip install --no-cache-dir \
       kafka-python \
       pymongo \
       papermill \
-      flask
+      flask \
+      kagglehub
 
-# Fijar NumPy 1.26.x en el entorno activo (evita fallos con binarios 1.x)
-RUN /opt/conda/bin/pip install --no-cache-dir "numpy==1.26.4"
+# Versiones compatibles de NumPy y SciPy para el kernel de entrenamiento
+RUN /opt/conda/bin/pip install --no-cache-dir \
+      "numpy==1.26.4" \
+      "scipy==1.11.4" \
+      "seaborn==0.12.2"
+
+# NumPy intenta ejecutar `lscpu` al importar numpy.testing para detectar SVE.
+# Bajo Rosetta (imagen amd64 sobre host arm64), el subproceso puede bloquear
+# kernels multihilo de Jupyter/Papermill. SVE no aplica al contenedor x86_64.
+RUN sed -i \
+      's/_SUPPORTS_SVE = check_support_sve()/_SUPPORTS_SVE = False/' \
+      /opt/conda/lib/python3.9/site-packages/numpy/testing/_private/utils.py

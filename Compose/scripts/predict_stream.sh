@@ -29,4 +29,4 @@ PAPERMILL_BIN="/opt/conda/bin/papermill"
 if [ ! -x "$PAPERMILL_BIN" ]; then PAPERMILL_BIN="papermill"; fi
 "$PAPERMILL_BIN" \
   "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb" \
-  "/home/jovyan/Food_delivery/Deploying_Predictive_Systems/Make_Predictions.ipynb"
+  "/home/jovyan/logs/Make_Predictions_executed.ipynb"

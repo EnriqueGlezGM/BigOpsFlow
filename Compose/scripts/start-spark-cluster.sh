@@ -29,6 +29,9 @@ if [ "$?" -ne 0 ]; then
   python -m pip install --no-cache-dir 'numpy<2' || true
 fi
 
+# Prearrancar el gateway Java para que los kernels no hagan fork bajo Rosetta.
+source /scripts/start-pyspark-gateway.sh || return 1
+
 # Iniciar el microservicio Flask para lanzar Papermill (puerto 5000)
 mkdir -p /home/jovyan/logs
 PYBIN="/opt/conda/bin/python"

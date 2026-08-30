@@ -31,36 +31,25 @@ get_json() {
 parse_json_field() {
   # Lee JSON desde stdin y extrae un campo con Python
   # $1: nombre del campo
-  python - "$1" <<'PY'
-import sys, json
-field = sys.argv[1]
-data = json.load(sys.stdin)
-print(data.get(field, ""))
-PY
+  python -c 'import json, sys; print(json.load(sys.stdin).get(sys.argv[1], ""))' "$1"
 }
 
 latest_job_id_by_type() {
   # $1: tipo (train|predict)
   type="$1"
-  get_json "/jobs" | python - "$type" <<'PY'
-import sys, json
+  get_json "/jobs" | python -c '
+import json, sys
 job_type = sys.argv[1]
-data = json.load(sys.stdin)
-jobs = data.get('jobs', [])
-for j in jobs:  # ya está ordenado desc por el servidor
-    if j.get('type') == job_type:
-        print(j.get('id',''))
+for job in json.load(sys.stdin).get("jobs", []):
+    if job.get("type") == job_type:
+        print(job.get("id", ""))
         break
-PY
+' "$type"
 }
 
 job_status_by_id() {
   # $1: id
-  get_json "/jobs/$1" | python - <<'PY'
-import sys, json
-data = json.load(sys.stdin)
-print(data.get('status',''))
-PY
+  get_json "/jobs/$1" | python -c 'import json, sys; print(json.load(sys.stdin).get("status", ""))'
 }
 
 main() {

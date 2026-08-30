@@ -30,7 +30,7 @@ services:
             - ./:/home/jovyan
             - ./scripts:/scripts
         command: >
-            bash -lc "/scripts/start-spark-cluster.sh &&
+            bash -lc "source /scripts/start-spark-cluster.sh &&
                     start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
         networks:
             - agile_net
@@ -107,7 +107,7 @@ services:
         labels:
             description: TFM Enrique González Macías
             name: kafka
-        image: bitnami/kafka:3.6
+        image: bitnamilegacy/kafka:3.6
         environment:
             - KAFKA_CFG_NODE_ID=1
             - KAFKA_CFG_PROCESS_ROLES=controller,broker
