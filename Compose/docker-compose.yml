@@ -29,6 +29,7 @@ services:
         volumes:
             - ./:/home/jovyan
             - ./scripts:/scripts
+            - ../data:/home/jovyan/shared_data:ro
         command: >
             bash -lc "source /scripts/start-spark-cluster.sh &&
                     start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
@@ -42,7 +43,7 @@ services:
             description: TFM Enrique González Macías
             name: elastic
         tty: True
-        image: docker.elastic.co/elasticsearch/elasticsearch:9.1.2
+        image: elasticsearch:9.1.2
         restart: always
         environment:
             cluster.name: "es-docker"
@@ -125,7 +126,7 @@ services:
     kibana:
         container_name: kibana
         hostname: kibana
-        image: docker.elastic.co/kibana/kibana:9.1.2
+        image: kibana:9.1.2
         restart: always
         environment:
             ELASTICSEARCH_HOSTS: "http://elastic:9200"

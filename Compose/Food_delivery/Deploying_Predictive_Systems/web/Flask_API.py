@@ -42,15 +42,35 @@ def mydata_predict():
     uid = str(uuid.uuid4())
     payload["UUID"] = uid
 
-    # Normalizar tipos numéricos si llegan como string
-    ints  = [ "delivery_fee", "commission_fee", "payment_processing_fee"]
-    floats = ["order_value", "refunds/chargebacks"]
-    for k in ints:
-        if k in payload and payload[k] not in (None, ""):
-            payload[k] = int(payload[k])
-    for k in floats:
-        if k in payload and payload[k] not in (None, ""):
+    # Contrato del modelo: todos estos campos se conocen al registrar el pedido.
+    numeric_fields = [
+        "delivery_person_age", "delivery_person_ratings",
+        "restaurant_latitude", "restaurant_longitude",
+        "delivery_location_latitude", "delivery_location_longitude",
+        "vehicle_condition", "multiple_deliveries",
+    ]
+    required_fields = numeric_fields + [
+        "order_date_and_time", "weather_conditions", "road_traffic_density",
+        "type_of_order", "type_of_vehicle", "festival", "city",
+    ]
+    missing = [k for k in required_fields if payload.get(k) in (None, "")]
+    if missing:
+        return jsonify({"error": "missing_fields", "fields": missing}), 400
+    try:
+        for k in numeric_fields:
             payload[k] = float(payload[k])
+    except (TypeError, ValueError):
+        return jsonify({"error": "invalid_numeric_field"}), 400
+
+    if not (-90 <= payload["restaurant_latitude"] <= 90 and
+            -90 <= payload["delivery_location_latitude"] <= 90 and
+            -180 <= payload["restaurant_longitude"] <= 180 and
+            -180 <= payload["delivery_location_longitude"] <= 180):
+        return jsonify({"error": "invalid_coordinates"}), 400
+    if not (18 <= payload["delivery_person_age"] <= 70):
+        return jsonify({"error": "invalid_delivery_person_age"}), 400
+    if not (1 <= payload["delivery_person_ratings"] <= 5):
+        return jsonify({"error": "invalid_delivery_person_ratings"}), 400
 
     # Timestamps
     payload["order_date_and_time"] = to_iso(payload.get("order_date_and_time"))

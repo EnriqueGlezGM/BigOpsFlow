@@ -36,55 +36,21 @@
             <form id="predictForm" novalidate>
               <div class="row g-3">
 
-                <div class="col-12 col-md-6">
-                  <label for="customer_id" class="form-label">Customer ID</label>
-                  <input type="text" class="form-control" id="customer_id" value="cust_123" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="restaurant_id" class="form-label">Restaurant ID</label>
-                  <input type="text" class="form-control" id="restaurant_id" value="rest_456" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="order_date_and_time" class="form-label">Order Date and Time</label>
-                  <input type="datetime-local" class="form-control" id="order_date_and_time" value="2025-08-06T13:00" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="order_value" class="form-label">Order Value</label>
-                  <input type="number" class="form-control" id="order_value" value="1000" min="0" step="0.01" inputmode="decimal" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="delivery_fee" class="form-label">Delivery Fee</label>
-                  <input type="number" class="form-control" id="delivery_fee" value="100" min="0" step="0.01" inputmode="decimal" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="payment_method" class="form-label">Payment Method</label>
-                  <input type="text" class="form-control" id="payment_method" value="credit_card" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="discounts_and_offers" class="form-label">Discounts and Offers</label>
-                  <input type="text" class="form-control" id="discounts_and_offers" value="10% off">
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="commission_fee" class="form-label">Commission Fee</label>
-                  <input type="number" class="form-control" id="commission_fee" value="100" min="0" step="0.01" inputmode="decimal" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="payment_processing_fee" class="form-label">Payment Processing Fee</label>
-                  <input type="number" class="form-control" id="payment_processing_fee" value="20" min="0" step="0.01" inputmode="decimal" required>
-                </div>
-
-                <div class="col-12 col-md-6">
-                  <label for="refunds_chargebacks" class="form-label">Refunds/Chargebacks</label>
-                  <input type="number" class="form-control" id="refunds_chargebacks" value="0" min="0" step="0.01" inputmode="decimal" required>
-                </div>
+                <div class="col-12 col-md-6"><label for="delivery_person_age" class="form-label">Edad del repartidor</label><input type="number" class="form-control" id="delivery_person_age" value="30" min="18" max="70" required></div>
+                <div class="col-12 col-md-6"><label for="delivery_person_ratings" class="form-label">Valoración del repartidor</label><input type="number" class="form-control" id="delivery_person_ratings" value="4.7" min="1" max="5" step="0.1" required></div>
+                <div class="col-12 col-md-6"><label for="restaurant_latitude" class="form-label">Latitud del restaurante</label><input type="number" class="form-control" id="restaurant_latitude" value="22.651847" min="-90" max="90" step="any" required></div>
+                <div class="col-12 col-md-6"><label for="restaurant_longitude" class="form-label">Longitud del restaurante</label><input type="number" class="form-control" id="restaurant_longitude" value="75.881991" min="-180" max="180" step="any" required></div>
+                <div class="col-12 col-md-6"><label for="delivery_location_latitude" class="form-label">Latitud de entrega</label><input type="number" class="form-control" id="delivery_location_latitude" value="22.721847" min="-90" max="90" step="any" required></div>
+                <div class="col-12 col-md-6"><label for="delivery_location_longitude" class="form-label">Longitud de entrega</label><input type="number" class="form-control" id="delivery_location_longitude" value="75.951991" min="-180" max="180" step="any" required></div>
+                <div class="col-12 col-md-6"><label for="order_date_and_time" class="form-label">Fecha y hora del pedido</label><input type="datetime-local" class="form-control" id="order_date_and_time" value="2026-08-30T20:00" required></div>
+                <div class="col-12 col-md-6"><label for="weather_conditions" class="form-label">Meteorología</label><select class="form-select" id="weather_conditions" required><option>Sunny</option><option>Cloudy</option><option>Fog</option><option>Stormy</option><option>Sandstorms</option><option>Windy</option></select></div>
+                <div class="col-12 col-md-6"><label for="road_traffic_density" class="form-label">Densidad de tráfico</label><select class="form-select" id="road_traffic_density" required><option>Low</option><option selected>Medium</option><option>High</option><option>Jam</option></select></div>
+                <div class="col-12 col-md-6"><label for="vehicle_condition" class="form-label">Estado del vehículo</label><select class="form-select" id="vehicle_condition" required><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></div>
+                <div class="col-12 col-md-6"><label for="type_of_order" class="form-label">Tipo de pedido</label><select class="form-select" id="type_of_order" required><option>Snack</option><option>Drinks</option><option selected>Meal</option><option>Buffet</option></select></div>
+                <div class="col-12 col-md-6"><label for="type_of_vehicle" class="form-label">Tipo de vehículo</label><select class="form-select" id="type_of_vehicle" required><option selected>motorcycle</option><option>scooter</option><option>electric_scooter</option><option>bicycle</option></select></div>
+                <div class="col-12 col-md-6"><label for="multiple_deliveries" class="form-label">Entregas simultáneas</label><input type="number" class="form-control" id="multiple_deliveries" value="1" min="0" max="5" required></div>
+                <div class="col-12 col-md-6"><label for="festival" class="form-label">Festival</label><select class="form-select" id="festival" required><option selected>No</option><option>Yes</option></select></div>
+                <div class="col-12 col-md-6"><label for="city" class="form-label">Tipo de ciudad</label><select class="form-select" id="city" required><option selected>Metropolitian</option><option>Urban</option><option>Semi-Urban</option></select></div>
               </div>
 
               <div class="d-flex align-items-center gap-3 mt-4">
@@ -215,17 +181,21 @@
 
       // Construir el JSON exactamente como lo espera Spark (nombres y tipos)
       const payload = {
-        customer_id: document.getElementById('customer_id').value,
-        restaurant_id: document.getElementById('restaurant_id').value,
+        delivery_person_age: Number(document.getElementById('delivery_person_age').value),
+        delivery_person_ratings: Number(document.getElementById('delivery_person_ratings').value),
+        restaurant_latitude: Number(document.getElementById('restaurant_latitude').value),
+        restaurant_longitude: Number(document.getElementById('restaurant_longitude').value),
+        delivery_location_latitude: Number(document.getElementById('delivery_location_latitude').value),
+        delivery_location_longitude: Number(document.getElementById('delivery_location_longitude').value),
         order_date_and_time: toRFC3339Local(document.getElementById('order_date_and_time').value),
-        order_value: Number(document.getElementById('order_value').value),
-        delivery_fee: Number(document.getElementById('delivery_fee').value),
-        payment_method: document.getElementById('payment_method').value,
-        discounts_and_offers: document.getElementById('discounts_and_offers').value,
-        commission_fee: Number(document.getElementById('commission_fee').value),
-        payment_processing_fee: Number(document.getElementById('payment_processing_fee').value),
-        // OJO: la clave en JSON debe llevar la barra: "refunds/chargebacks"
-        ["refunds/chargebacks"]: Number(document.getElementById('refunds_chargebacks').value)
+        weather_conditions: document.getElementById('weather_conditions').value,
+        road_traffic_density: document.getElementById('road_traffic_density').value,
+        vehicle_condition: Number(document.getElementById('vehicle_condition').value),
+        type_of_order: document.getElementById('type_of_order').value,
+        type_of_vehicle: document.getElementById('type_of_vehicle').value,
+        multiple_deliveries: Number(document.getElementById('multiple_deliveries').value),
+        festival: document.getElementById('festival').value,
+        city: document.getElementById('city').value
       };
 
       try {
