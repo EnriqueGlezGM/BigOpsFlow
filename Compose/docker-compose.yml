@@ -19,9 +19,14 @@ services:
             ORCHESTRATE_ON_START: "true"
             AUTO_CHAIN_PREDICT_AFTER_TRAIN: "true"
         depends_on:
-            - elastic
-            - mongo
-            - mongo-express
+            elastic:
+                condition: service_started
+            mongo:
+                condition: service_started
+            mongo-express:
+                condition: service_started
+            kafka-init:
+                condition: service_completed_successfully
         ports:
             - "8888:8888"
             - "5001:5000"
@@ -122,7 +127,28 @@ services:
             - "9092:9092"
         networks:
             - agile_net
-    
+        healthcheck:
+            test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1"]
+            interval: 5s
+            timeout: 5s
+            retries: 24
+            start_period: 10s
+
+    kafka-init:
+        image: bitnamilegacy/kafka:3.6
+        depends_on:
+            kafka:
+                condition: service_healthy
+        command:
+            - /bin/bash
+            - -c
+            - |
+                /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mydata_prediction_request --partitions 1 --replication-factor 1
+                /opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mydata_prediction_response --partitions 1 --replication-factor 1
+        networks:
+            - agile_net
+        restart: "no"
+
     kibana:
         container_name: kibana
         hostname: kibana
@@ -159,8 +185,8 @@ services:
                 condition: service_healthy
             kibana:
                 condition: service_healthy
-            kafka:
-                condition: service_started
+            kafka-init:
+                condition: service_completed_successfully
             mongo:
                 condition: service_started
             agile:
