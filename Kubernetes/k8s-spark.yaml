@@ -1,5 +1,5 @@
-# Nota: Renderiza este fichero con envsubst para resolver solo ${BASE_DIR}, ej.:
-#   BASE_DIR=$(pwd) envsubst '${BASE_DIR}' < k8s-spark.yaml | kubectl apply -f -
+# Nota: apply-stack.sh resuelve ${BASE_DIR} y ${SHARED_DATA_DIR} como rutas
+# absolutas antes de aplicar este manifiesto.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -37,6 +37,39 @@ spec:
   resources:
     requests:
       storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: shared-data-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeMode: Filesystem
+  persistentVolumeReclaimPolicy: Retain
+  claimRef:
+    namespace: spark
+    name: shared-data-pvc
+  hostPath:
+    path: ${SHARED_DATA_DIR}
+    type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-data-pvc
+  namespace: spark
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 5Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -80,9 +113,9 @@ spec:
             - name: JAVA_HOME
               value: /opt/java/openjdk
             - name: PYSPARK_PYTHON
-              value: /usr/bin/python3
+              value: /opt/conda/bin/python
             - name: PYSPARK_DRIVER_PYTHON
-              value: /usr/bin/python3
+              value: /opt/conda/bin/python
             - name: SPARK_MASTER_HOST
               value: 0.0.0.0
             - name: SPARK_MASTER_PORT
@@ -177,7 +210,7 @@ spec:
             - name: JAVA_HOME
               value: /opt/java/openjdk
             - name: PYSPARK_PYTHON
-              value: /usr/bin/python3
+              value: /opt/conda/bin/python
             - name: SPARK_WORKER_MEMORY
               value: 3g
             - name: SPARK_WORKER_CORES
@@ -225,8 +258,8 @@ spec:
               echo "[fixer] setting ownership and permissions..." &&
               chown -R 185:185 /models || true &&
               chmod -R 0777 /models || true &&
-              mkdir -p /models/gbt /models/.pylibs /models/scripts &&
-              chmod 0777 /models/gbt /models/.pylibs &&
+              mkdir -p /models/food_delivery /models/.pylibs /models/scripts &&
+              chmod 0777 /models/food_delivery /models/.pylibs &&
               echo "[fixer] done."
           volumeMounts:
             - name: models-vol
@@ -246,6 +279,29 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      initContainers:
+        - name: wait-spark-master
+          image: busybox:1.36
+          command: ["/bin/sh", "-lc"]
+          args:
+            - >
+              until nc -z spark-master-svc 7077; do
+                echo "Esperando a Spark Master...";
+                sleep 2;
+              done
+        - name: prepare-storage
+          image: busybox:1.36
+          command: ["/bin/sh", "-lc"]
+          args:
+            - >
+              mkdir -p /models/food_delivery /shared-data/food_delivery &&
+              chown -R 185:185 /models/food_delivery /shared-data/food_delivery || true &&
+              chmod -R 0777 /models/food_delivery /shared-data/food_delivery
+          volumeMounts:
+            - name: models-vol
+              mountPath: /models
+            - name: shared-data-vol
+              mountPath: /shared-data
       containers:
         - name: submit
           image: spark:4.0.1-py
@@ -271,19 +327,25 @@ spec:
               --conf spark.executor.memory=2g
               --conf spark.executor.memoryOverhead=512m
               --conf spark.driver.memory=2g
-              /code/train_gbt.py
-              --data /models/data/dataset.csv
-              --out  /models/gbt/pipeline_model
+              /code/train_food_delivery.py
+              --data /shared-data/food_delivery/train.csv
+              --out /models/food_delivery/pipeline_model
+              --metadata /models/food_delivery/model_metadata.json
           volumeMounts:
             - name: models-vol
               mountPath: /models
             - name: models-vol
               mountPath: /code
               subPath: scripts
+            - name: shared-data-vol
+              mountPath: /shared-data
       volumes:
         - name: models-vol
           persistentVolumeClaim:
             claimName: models-pvc
+        - name: shared-data-vol
+          persistentVolumeClaim:
+            claimName: shared-data-pvc
 ---
 apiVersion: v1
 kind: PersistentVolume
@@ -475,7 +537,7 @@ spec:
             claimName: elastic-pvc
       containers:
         - name: elastic
-          image: docker.elastic.co/elasticsearch/elasticsearch:9.1.2
+          image: elasticsearch:9.1.2
           env:
             - name: discovery.type
               value: single-node
@@ -511,12 +573,13 @@ metadata:
   name: elastic
   namespace: spark
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector: { app: elastic }
   ports:
     - name: http
       port: 9200
       targetPort: 9200
+      nodePort: 30920
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -558,7 +621,7 @@ spec:
               echo "[kibana-init] Elasticsearch is up."
       containers:
         - name: kibana
-          image: docker.elastic.co/kibana/kibana:9.1.2
+          image: kibana:9.1.2
           imagePullPolicy: IfNotPresent
           env:
             - name: NODE_OPTIONS
@@ -641,7 +704,7 @@ spec:
               curl -sS -f -X POST "$KIBANA_URL/api/data_views/data_view" \
                 -H 'kbn-xsrf: true' \
                 -H 'Content-Type: application/json' \
-                -d "{\"data_view\":{\"id\":\"$DATA_VIEW_ID\",\"title\":\"$INDEX_PATTERN\",\"name\":\"$DATA_VIEW_NAME\",\"timeFieldName\":\"@timestamp\"}}";
+                -d "{\"override\":true,\"data_view\":{\"id\":\"$DATA_VIEW_ID\",\"title\":\"$INDEX_PATTERN\",\"name\":\"$DATA_VIEW_NAME\",\"timeFieldName\":\"@ingest_ts\"}}";
               echo "[dv] done.";
 ---
 apiVersion: apps/v1
@@ -728,11 +791,13 @@ metadata:
 data:
   app.py: |
     import os, json, time, urllib.request, urllib.error
+    from datetime import datetime
     from uuid import uuid4
-    from typing import Any, Dict, Optional
+    from typing import Any, Dict, Literal, Optional
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
     from kafka import KafkaProducer, KafkaConsumer
+    from pydantic import BaseModel, Field
 
     app = FastAPI()
     app.add_middleware(
@@ -753,9 +818,26 @@ data:
         linger_ms=0,
     )
 
+    class PredictionRequest(BaseModel):
+        UUID: Optional[str] = None
+        delivery_person_age: float = Field(ge=18, le=70)
+        delivery_person_ratings: float = Field(ge=1, le=5)
+        restaurant_latitude: float = Field(ge=-90, le=90)
+        restaurant_longitude: float = Field(ge=-180, le=180)
+        delivery_location_latitude: float = Field(ge=-90, le=90)
+        delivery_location_longitude: float = Field(ge=-180, le=180)
+        order_date_and_time: datetime
+        weather_conditions: Literal["Sunny", "Cloudy", "Fog", "Stormy", "Sandstorms", "Windy"]
+        road_traffic_density: Literal["Low", "Medium", "High", "Jam"]
+        vehicle_condition: float = Field(ge=0, le=3)
+        type_of_order: Literal["Snack", "Drinks", "Meal", "Buffet"]
+        type_of_vehicle: Literal["motorcycle", "scooter", "electric_scooter", "bicycle"]
+        multiple_deliveries: float = Field(ge=0, le=5)
+        festival: Literal["No", "Yes"]
+        city: Literal["Metropolitian", "Urban", "Semi-Urban"]
 
-    def await_response(key: str, timeout_sec: float = 10.0) -> Optional[Dict[str, Any]]:
-        """Espera en Kafka al mensaje de respuesta con la misma key."""
+
+    def create_response_consumer(timeout_sec: float) -> KafkaConsumer:
         consumer = KafkaConsumer(
             RESPONSE_TOPIC,
             bootstrap_servers=BOOTSTRAP,
@@ -766,6 +848,13 @@ data:
             value_deserializer=lambda v: json.loads(v.decode("utf-8")),
             key_deserializer=lambda k: k.decode("utf-8") if k else None,
         )
+        assignment_deadline = time.time() + 5
+        while not consumer.assignment() and time.time() < assignment_deadline:
+            consumer.poll(timeout_ms=250)
+        return consumer
+
+    def await_response(consumer: KafkaConsumer, key: str, timeout_sec: float) -> Optional[Dict[str, Any]]:
+        """Espera en Kafka al mensaje de respuesta con la misma key."""
         deadline = time.time() + timeout_sec
         try:
             while time.time() < deadline:
@@ -783,9 +872,11 @@ data:
         return {"ok": True}
 
     @app.post("/predict")
-    async def predict(payload: Dict[str, Any]):
+    async def predict(request_data: PredictionRequest):
         try:
-            key = payload.get("UUID") or ""
+            payload = request_data.model_dump(mode="json")
+            key = payload.get("UUID") or f"req-{uuid4()}"
+            payload["UUID"] = key
             producer.send(REQUEST_TOPIC, key=key, value=payload)
             producer.flush()
             return {"status": "queued", "topic": REQUEST_TOPIC, "key": key}
@@ -794,25 +885,33 @@ data:
 
 
     @app.post("/predict-sync")
-    def predict_sync(payload: Dict[str, Any]):
+    def predict_sync(request_data: PredictionRequest):
         """
         Encola la petición y espera una respuesta en Kafka (RESPONSE_TOPIC) con la misma UUID.
         Timeout de ~60s.
         """
         try:
+            payload = request_data.model_dump(mode="json")
             key = payload.get("UUID") or f"req-{uuid4()}"
+            payload["UUID"] = key
+            consumer = create_response_consumer(timeout_sec=60.0)
             producer.send(REQUEST_TOPIC, key=key, value=payload)
             producer.flush()
 
-            resp = await_response(key, timeout_sec=60.0)
+            resp = await_response(consumer, key, timeout_sec=60.0)
             if resp is None:
-                return {"status": "queued", "key": key, "detail": "sin respuesta en 60s"}
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"La prediccion {key} no recibio respuesta en 60 segundos",
+                )
             return {
                 "status": "ok",
                 "key": key,
                 "prediction": resp.get("prediction"),
                 "result": resp,
             }
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -846,6 +945,16 @@ spec:
   template:
     metadata: { labels: { app: predict-ingest } }
     spec:
+      initContainers:
+        - name: ensure-topics
+          image: apache/kafka:3.7.1
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-lc"]
+          args:
+            - >
+              until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1; do sleep 2; done;
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mydata_prediction_request --partitions 1 --replication-factor 1;
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mydata_prediction_response --partitions 1 --replication-factor 1
       containers:
         - name: api
           image: python:3.11-slim
@@ -855,6 +964,8 @@ spec:
               value: "kafka:9092"
             - name: REQUEST_TOPIC
               value: "mydata_prediction_request"
+            - name: RESPONSE_TOPIC
+              value: "mydata_prediction_response"
             - name: PYTHONPATH
               value: /app
           command: ["/bin/sh","-lc"]
@@ -883,7 +994,7 @@ metadata:
   name: predict-ingest
   namespace: spark
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector: { app: predict-ingest }
   ports:
     - name: http
@@ -940,7 +1051,8 @@ metadata:
   namespace: spark
   labels: { app: spark, component: stream-predict }
 spec:
-  replicas: 1
+  # apply-stack.sh lo activa cuando el entrenamiento termina correctamente.
+  replicas: 0
   selector: { matchLabels: { app: spark, component: stream-predict } }
   template:
     metadata: { labels: { app: spark, component: stream-predict } }
@@ -952,7 +1064,7 @@ spec:
         - name: init-models
           image: busybox:1.36
           command: ["/bin/sh","-c"]
-          args: ["mkdir -p /models/gbt /models/checkpoints /models/.pylibs /models/.ivy2 /models/scripts && chown -R 185:185 /models || true && chmod -R 0777 /models || true"]
+          args: ["mkdir -p /models/food_delivery /models/checkpoints /models/.pylibs /models/.ivy2 /models/scripts && chown -R 185:185 /models || true && chmod -R 0777 /models || true"]
           volumeMounts:
             - name: models-vol
               mountPath: /models
@@ -967,24 +1079,37 @@ spec:
                 sleep 2;
               done;
               echo "[wait-kafka] Kafka is reachable."
+        - name: wait-sinks
+          image: busybox:1.36
+          command: ["/bin/sh", "-lc"]
+          args:
+            - >
+              echo "[wait-sinks] Waiting for MongoDB and Elasticsearch...";
+              until nc -z -w 1 mongo 27017; do sleep 2; done;
+              until nc -z -w 1 elastic 9200; do sleep 2; done;
+              echo "[wait-sinks] Persistence services are reachable."
+        - name: ensure-topics
+          image: apache/kafka:3.7.1
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-lc"]
+          args:
+            - >
+              until /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1; do sleep 2; done;
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mydata_prediction_request --partitions 1 --replication-factor 1;
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic mydata_prediction_response --partitions 1 --replication-factor 1
         - name: check-model
           image: busybox:1.36
           env:
             - name: MODEL_DIR
-              value: "/models/gbt/pipeline_model"
+              value: "/models/food_delivery/pipeline_model"
           command: ["/bin/sh","-lc"]
           args:
             - >
-              ALT="${MODEL_DIR%/*}/best_pipeline";
               TARGET="${MODEL_DIR}";
-              echo "[check-model] waiting for model at $TARGET (alt $ALT)";
+              echo "[check-model] waiting for model at $TARGET";
               echo "[check-model] model env MODEL_DIR=$MODEL_DIR";
               for i in $(seq 1 60); do
-                if [ -d "$TARGET" ] || [ -d "$ALT" ]; then
-                  if [ ! -d "$TARGET" ] && [ -d "$ALT" ]; then
-                    echo "[check-model] creating symlink $TARGET -> $ALT";
-                    ln -s "$ALT" "$TARGET" || true;
-                  fi;
+                if [ -d "$TARGET" ]; then
                   echo "[check-model] directory listing:";
                   ls -l "$TARGET" || true;
                   echo "[check-model] model ready.";
@@ -994,7 +1119,7 @@ spec:
                 sleep 5;
               done;
               echo "[check-model] ERROR: model not found after 5 minutes";
-              echo "[check-model] Hint: ensure training has written the model to $TARGET or $ALT";
+              echo "[check-model] Hint: ensure training has written the model to $TARGET";
               exit 1;
           volumeMounts:
             - name: models-vol
@@ -1013,9 +1138,9 @@ spec:
             - name: SPARK_LOCAL_IP
               valueFrom: { fieldRef: { fieldPath: status.podIP } }
             - name: MODEL_DIR
-              value: "/models/gbt/pipeline_model"
+              value: "/models/food_delivery/pipeline_model"
             - name: CHECKPOINT_DIR
-              value: "/models/checkpoints/prediction-v1"
+              value: "/models/checkpoints/prediction-v2"
             - name: PYTHONPATH
               value: "/models/.pylibs"
             - name: SPARK_SUBMIT_OPTS

@@ -1,64 +1,36 @@
-# -*- coding: utf-8 -*-
-# Streaming Kafka -> Enriquecido -> Predicción -> Mongo + Kafka + Elasticsearch
+#!/usr/bin/env python3
+"""Streaming Kafka -> modelo -> Kafka, MongoDB y Elasticsearch."""
+
+import datetime
+import json
+import math
+import os
+import urllib.error
+import urllib.request
+from uuid import uuid4
+
+import pymongo
+from pyspark.ml import PipelineModel
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, TimestampType, DoubleType
 from pyspark.sql.functions import (
-    from_json,
+    abs as sql_abs,
+    asin,
     col,
-    hour,
-    date_format,
-    dayofweek,
-    when,
+    cos,
     current_timestamp,
-    coalesce,
+    dayofweek,
+    from_json,
+    hour,
     lit,
+    radians,
+    sin,
+    sqrt,
+    struct,
+    to_json,
     to_timestamp,
 )
-from pyspark.ml import PipelineModel
-import os
-import datetime
-from pyspark import SparkContext
+from pyspark.sql.types import DoubleType, StringType, StructField, StructType
 
-# Cierra sesiones previas si las hay
-try:
-    _active = SparkSession.getActiveSession()
-    if _active is not None:
-        _active.stop()
-except Exception:
-    pass
-
-if SparkContext._active_spark_context:
-    SparkContext._active_spark_context.stop()
-
-# SparkSession apuntando al cluster
-spark = (
-    SparkSession.builder
-    .appName("analysis")
-    .master("spark://spark-master-svc:7077")
-    .getOrCreate()
-)
-spark.sparkContext.setLogLevel("ERROR")
-print("✅ SparkSession creada")
-
-# -------------------------
-# 1) Cargar modelo
-# -------------------------
-print("🔧 Cargando PipelineModel...")
-base_path = "/models/gbt"
-default_model = f"{base_path}/best_pipeline"
-model_dir = os.getenv("MODEL_DIR", f"{base_path}/pipeline_model")
-if not os.path.isdir(model_dir):
-    alt_model = default_model
-    if os.path.isdir(alt_model):
-        print(f"ℹ️  MODEL_DIR no encontrado ({model_dir}), usando alternativo {alt_model}")
-        model_dir = alt_model
-    else:
-        raise FileNotFoundError(
-            f"Modelo no encontrado en {model_dir}. "
-            f"Asegura que el job de training haya escrito el PipelineModel o crea un symlink hacia {alt_model}."
-        )
-model = PipelineModel.load(model_dir)
-print("✅ Modelo cargado:", model_dir)
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 REQUEST_TOPIC = os.getenv("REQUEST_TOPIC", "mydata_prediction_request")
@@ -66,331 +38,231 @@ RESPONSE_TOPIC = os.getenv("RESPONSE_TOPIC", "mydata_prediction_response")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongo:27017")
 MONGO_DB = os.getenv("MONGO_DB", "agile_data_science")
 MONGO_COLL = os.getenv("MONGO_COLL", "mydata_prediction_response")
-ELASTIC_URL = os.getenv("ELASTIC_URL", "http://elastic:9200")
+ELASTIC_URL = os.getenv("ELASTIC_URL", "http://elastic:9200").rstrip("/")
 ELASTIC_INDEX = os.getenv("ELASTIC_INDEX", "mydata_prediction_response")
+MODEL_DIR = os.getenv("MODEL_DIR", "/models/food_delivery/pipeline_model")
+CHECKPOINT_DIR = os.getenv("CHECKPOINT_DIR", "/models/checkpoints/prediction-v2")
 
-# -------------------------
-# 2) Esquema de entrada (incluye UUID)
-# -------------------------
-schema = StructType([
-    StructField("UUID", StringType(), True),
-    StructField("customer_id", StringType(), True),
-    StructField("restaurant_id", StringType(), True),
-    StructField("order_date_and_time", TimestampType(), True),
-    StructField("order_value", DoubleType(), True),
-    StructField("delivery_fee", DoubleType(), True),
-    StructField("payment_method", StringType(), True),
-    StructField("discounts_and_offers", StringType(), True),
-    StructField("commission_fee", DoubleType(), True),
-    StructField("payment_processing_fee", DoubleType(), True),
-    StructField("refunds/chargebacks", DoubleType(), True),
-])
 
-# --- Crear los topics de Kafka si no existen ---
-from kafka.admin import KafkaAdminClient, NewTopic
-from kafka.errors import TopicAlreadyExistsError
-
-try:
-    admin = KafkaAdminClient(bootstrap_servers=KAFKA_BOOTSTRAP, client_id="init-topics")
-    topics = [
-        NewTopic(name=REQUEST_TOPIC, num_partitions=1, replication_factor=1),
-        NewTopic(name=RESPONSE_TOPIC, num_partitions=1, replication_factor=1),
+SCHEMA = StructType(
+    [
+        StructField("UUID", StringType(), False),
+        StructField("delivery_person_age", DoubleType(), True),
+        StructField("delivery_person_ratings", DoubleType(), True),
+        StructField("restaurant_latitude", DoubleType(), True),
+        StructField("restaurant_longitude", DoubleType(), True),
+        StructField("delivery_location_latitude", DoubleType(), True),
+        StructField("delivery_location_longitude", DoubleType(), True),
+        StructField("order_date_and_time", StringType(), True),
+        StructField("weather_conditions", StringType(), True),
+        StructField("road_traffic_density", StringType(), True),
+        StructField("vehicle_condition", DoubleType(), True),
+        StructField("type_of_order", StringType(), True),
+        StructField("type_of_vehicle", StringType(), True),
+        StructField("multiple_deliveries", DoubleType(), True),
+        StructField("festival", StringType(), True),
+        StructField("city", StringType(), True),
     ]
-    admin.create_topics(topics)
-    print(f"✅ Topics de Kafka creados ({REQUEST_TOPIC}, {RESPONSE_TOPIC})")
-    admin.close()
-except TopicAlreadyExistsError:
-    print("ℹ️  Los topics ya existían")
-except Exception as e:
-    print(f"⚠️  No se pudieron crear los topics automáticamente: {e}")
-
-# -------------------------
-# 3) Lectura desde Kafka
-# -------------------------
-print(f"🔌 Conectando a Kafka (topic: {REQUEST_TOPIC})...")
-raw_stream = (
-    spark.readStream
-    .format("kafka")
-    .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
-    .option("subscribe", REQUEST_TOPIC)
-    .option("startingOffsets", "latest")   # "earliest" para reconsumir
-    .load()
-)
-
-json_df = (
-    raw_stream
-    .selectExpr("CAST(value AS STRING) AS json_data")
-    .select(from_json("json_data", schema, {"timestampFormat": "yyyy-MM-dd'T'HH:mm:ss[XXX][XX][X]"}).alias("data"))
-    .select("data.*")
-    .withColumn("order_date_and_time", to_timestamp(col("order_date_and_time")))
-)
-
-# -------------------------
-# 4) Enriquecimiento
-# -------------------------
-df_enriched = (
-    json_df
-    .withColumn("day_of_week_num", dayofweek("order_date_and_time"))
-    .withColumn("day_of_week", date_format("order_date_and_time", "EEEE"))
-    .withColumn("hour_of_day", hour("order_date_and_time"))
-    .withColumn("hour_of_day_str", col("hour_of_day").cast("string"))
-    .withColumn("es_fin_de_semana", when(col("day_of_week_num").isin([1, 7]), 1).otherwise(0))
-    .withColumn("es_hora_punta", when(
-        (col("hour_of_day").between(13, 15)) | (col("hour_of_day").between(20, 22)), 1
-    ).otherwise(0))
-    .withColumn("has_discount", when(col("discounts_and_offers").isNotNull(), 1).otherwise(0))
-    .withColumn("discount_value", when(col("has_discount") == 1, col("order_value") * 0.1).otherwise(0.0))
-    .withColumn("refunded", when(col("refunds/chargebacks") > 0, 1).otherwise(0))
-    .withColumn("order_value_dbl", col("order_value").cast("double"))
-    .withColumn("delivery_fee_dbl", col("delivery_fee").cast("double"))
-    .withColumn("commission_fee_dbl", col("commission_fee").cast("double"))
-    .withColumn("payment_processing_fee_dbl", col("payment_processing_fee").cast("double"))
-    .withColumn("refunds_chargebacks_dbl", col("refunds/chargebacks").cast("double"))
-)
-
-# -------------------------
-# 5) Selección de columnas (modelo + contexto)
-# -------------------------
-required_numeric = [
-    "order_value_dbl", "delivery_fee_dbl", "commission_fee_dbl", "payment_processing_fee_dbl",
-    "refunds_chargebacks_dbl", "discount_value", "has_discount", "refunded",
-    "es_fin_de_semana", "es_hora_punta"
-]
-required_categorical = ["day_of_week", "hour_of_day_str", "payment_method", "discounts_and_offers"]
-feature_cols = list(dict.fromkeys(required_numeric + required_categorical))
-context_cols = {
-    "payment_method": "payment_method_ctx",
-    "discounts_and_offers": "discounts_and_offers_ctx",
-    "order_date_and_time": "order_date_and_time_ctx",
-}
-DEFAULT_NULL_FILL = {
-    "day_of_week": "unknown",
-    "hour_of_day_str": "0",
-    "payment_method": "unknown",
-    "discounts_and_offers": "none",
-}
-
-dedup_enriched = (
-    df_enriched
-    .withWatermark("order_date_and_time", "1 hour")
-    .dropDuplicates(["UUID"])
 )
 
 
-def log_sample(df, label, columns):
-    """Log small, safe samples to debug microbatch content."""
-    try:
-        sample = df.select(*columns).limit(3).toJSON().collect()
-        if sample:
-            print(f"🔎 {label}: {sample}")
-    except Exception as e:
-        print(f"⚠️  No se pudo obtener muestra {label}: {e}")
-
-def ensure_es_index(es_url, index_name):
-    import urllib.request, urllib.error, json
-
-    mappings_body = {
-        "settings": {"number_of_shards": 1, "number_of_replicas": 0},
-        "mappings": {
-            "properties": {
-                "@timestamp": {
-                    "type": "date",
-                    "format": "strict_date_optional_time||epoch_millis",
-                }
-            }
-        },
+INDEX_MAPPING = {
+    "properties": {
+        "@ingest_ts": {"type": "date"},
+        "UUID": {"type": "keyword"},
+        "prediction": {"type": "double"},
+        "order_date_and_time": {"type": "date"},
+        "distance_km": {"type": "double"},
+        "delivery_person_age": {"type": "double"},
+        "delivery_person_ratings": {"type": "double"},
+        "road_traffic_density": {"type": "keyword"},
+        "weather_conditions": {"type": "keyword"},
+        "vehicle_condition": {"type": "double"},
+        "type_of_order": {"type": "keyword"},
+        "type_of_vehicle": {"type": "keyword"},
+        "multiple_deliveries": {"type": "double"},
+        "festival": {"type": "keyword"},
+        "city": {"type": "keyword"},
+        "epoch_id": {"type": "long"},
     }
+}
 
+
+def ensure_elasticsearch_index() -> None:
+    body = json.dumps({"mappings": INDEX_MAPPING}).encode("utf-8")
     try:
-        head_req = urllib.request.Request(f"{es_url.rstrip('/')}/{index_name}", method="HEAD")
-        with urllib.request.urlopen(head_req, timeout=5):
-            return True
-    except urllib.error.HTTPError as he:
-        if he.code == 404:
-            print(f"ℹ️  Índice ES {index_name} no existe, intentando crearlo...")
-            body = json.dumps(mappings_body)
-            try:
-                put_req = urllib.request.Request(
-                    f"{es_url.rstrip('/')}/{index_name}",
-                    data=body.encode("utf-8"),
-                    headers={"Content-Type": "application/json"},
-                    method="PUT",
-                )
-                with urllib.request.urlopen(put_req, timeout=10):
-                    print(f"✅ Índice ES {index_name} creado")
-                    return True
-            except Exception as e:
-                print(f"⚠️  No se pudo crear el índice {index_name}: {e}")
-        else:
-            print(f"⚠️  Error comprobando índice {index_name}: {he}")
-    except Exception as e:
-        print(f"⚠️  Error comprobando índice {index_name}: {e}")
-    return False
-
-
-# -------------------------
-# 7) foreachBatch: Mongo + Kafka + Elasticsearch (Bulk)
-# -------------------------
-def write_to_mongo_kafka_es(batch_df, epoch_id):
-    import pymongo, json, urllib.request, urllib.error
-    from uuid import uuid4
-
-    client = None
-    try:
-        rows = [r.asDict() for r in batch_df.collect()]
-        print(f"🧱 Microbatch {epoch_id}: {len(rows)} docs para sinks")
-        if not rows:
+        req = urllib.request.Request(f"{ELASTIC_URL}/{ELASTIC_INDEX}", data=body, method="PUT")
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=10):
+            print(f"[ES] Índice {ELASTIC_INDEX} creado")
             return
+    except urllib.error.HTTPError as exc:
+        if exc.code != 400:
+            raise
 
-        # Copia para ES
-        es_rows = []
-        for d in rows:
-            d_es = dict(d)
-            d_es.pop("_id", None)
-            # Normaliza timestamps a ISO para que casen con mapping date
-            for k, v in list(d_es.items()):
-                if isinstance(v, datetime.datetime):
-                    try:
-                        d_es[k] = v.isoformat()
-                    except Exception:
-                        pass
-            es_rows.append(d_es)
+    req = urllib.request.Request(
+        f"{ELASTIC_URL}/{ELASTIC_INDEX}/_mapping",
+        data=json.dumps(INDEX_MAPPING).encode("utf-8"),
+        method="PUT",
+    )
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=10):
+        print(f"[ES] Mapping de {ELASTIC_INDEX} actualizado")
 
-        ensure_es_index(ELASTIC_URL, ELASTIC_INDEX)
 
-        # Bulk ES
-        ndjson_lines = []
-        for d in es_rows:
-            es_id = d.get("UUID") or str(uuid4())
-            ndjson_lines.append(json.dumps({"index": {"_index": ELASTIC_INDEX, "_id": es_id}}))
-            ndjson_lines.append(json.dumps(d, default=str))
-        payload = ("\n".join(ndjson_lines) + "\n").encode("utf-8")
+def serialize_documents(batch_df, epoch_id):
+    documents = []
+    for row in batch_df.collect():
+        document = row.asDict(recursive=True)
+        for key, value in list(document.items()):
+            if isinstance(value, (datetime.datetime, datetime.date)):
+                document[key] = value.isoformat()
+        document["prediction"] = float(document["prediction"])
+        document["distance_km"] = float(document["distance_km"])
+        document["epoch_id"] = int(epoch_id)
+        documents.append(document)
+    return documents
 
-        try:
-            req = urllib.request.Request(
-                f"{ELASTIC_URL.rstrip('/')}/_bulk", data=payload,
-                headers={"Content-Type": "application/x-ndjson"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                body = resp.read().decode("utf-8", errors="replace")
-            es_resp = json.loads(body)
-            if es_resp.get("errors", False):
-                print("❌ ES bulk con errores:", body[:800], "...")
-        except urllib.error.HTTPError as he:
-            body = he.read().decode("utf-8", errors="replace")
-            print(f"❌ ES HTTPError {he.code}: {body[:800]}")
-        except Exception as e:
-            print("❌ Error conectando a ES:", e)
 
-        # Kafka respuesta
-        (batch_df
-         .selectExpr("UUID as key", "to_json(struct(*)) as value")
-         .write
-         .format("kafka")
-         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
-         .option("topic", RESPONSE_TOPIC)
-         .save())
+def write_outputs(batch_df, epoch_id) -> None:
+    documents = serialize_documents(batch_df, epoch_id)
+    if not documents:
+        return
 
-        # Mongo
-        client = pymongo.MongoClient(MONGO_URI)
-        db = client[MONGO_DB]
-        out = db[MONGO_COLL]
-        out.create_index([("UUID", pymongo.ASCENDING)], name="idx_uuid", unique=False, background=True)
-        out.create_index([("@timestamp", pymongo.DESCENDING)], name="idx_timestamp", background=True)
-        rows_for_mongo = [dict(d) for d in es_rows]
-        out.insert_many(rows_for_mongo)
+    response_rows = [
+        {
+            "UUID": document["UUID"],
+            "prediction": document["prediction"],
+            "distance_km": document["distance_km"],
+        }
+        for document in documents
+    ]
+    response_df = batch_df.sparkSession.createDataFrame(response_rows)
+    (
+        response_df.withColumn("key", col("UUID").cast("string"))
+        .withColumn("value", to_json(struct("UUID", "prediction", "distance_km")))
+        .selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+        .write.format("kafka")
+        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
+        .option("topic", RESPONSE_TOPIC)
+        .save()
+    )
 
-    except Exception as e:
-        print("❌ Error en foreachBatch:", e)
-        try:
-            if client is None:
-                client = pymongo.MongoClient(MONGO_URI)
-            db = client[MONGO_DB]
-            db["mydata_prediction_errors"].insert_one({
-                "epoch_id": int(epoch_id),
-                "error": str(e),
-                "note": "Fallo en foreachBatch",
-            })
-        except Exception as e2:
-            print("❌ Error registrando error en Mongo:", e2)
-    finally:
-        try:
-            client and client.close()
-        except Exception:
-            pass
-
-# -------------------------
-# 8) Lanzar el stream
-# -------------------------
-def process_batch(batch_df, epoch_id):
-    preds_batch = None
+    mongo_client = pymongo.MongoClient(MONGO_URI)
     try:
-        pre_count = batch_df.count()
-        print(f"🧱 Microbatch {epoch_id}: {pre_count} filas antes de transform")
-        if pre_count == 0:
-            return
-
-        log_sample(
-            batch_df,
-            f"pre-transform {epoch_id}",
-            ["UUID", "order_date_and_time", "payment_method", "discounts_and_offers"],
-        )
-
-        cleaned_batch = (
-            batch_df
-            .withColumn("payment_method", coalesce(col("payment_method"), lit(DEFAULT_NULL_FILL["payment_method"])))
-            .withColumn("discounts_and_offers", coalesce(col("discounts_and_offers"), lit(DEFAULT_NULL_FILL["discounts_and_offers"])))
-            .withColumn("day_of_week", coalesce(col("day_of_week"), lit(DEFAULT_NULL_FILL["day_of_week"])))
-            .withColumn("hour_of_day_str", coalesce(col("hour_of_day_str"), lit(DEFAULT_NULL_FILL["hour_of_day_str"])))
-            .withColumn("order_date_and_time", to_timestamp(col("order_date_and_time")))
-            .withColumn("order_value_dbl", coalesce(col("order_value_dbl"), lit(0.0)))
-            .withColumn("delivery_fee_dbl", coalesce(col("delivery_fee_dbl"), lit(0.0)))
-            .withColumn("commission_fee_dbl", coalesce(col("commission_fee_dbl"), lit(0.0)))
-            .withColumn("payment_processing_fee_dbl", coalesce(col("payment_processing_fee_dbl"), lit(0.0)))
-            .withColumn("refunds_chargebacks_dbl", coalesce(col("refunds_chargebacks_dbl"), lit(0.0)))
-        )
-
-        features_batch = cleaned_batch.select("UUID", *[col(c) for c in feature_cols])
-        preds_batch = model.transform(features_batch).cache()
-
-        post_count = preds_batch.count()
-        print(f"✅ Microbatch {epoch_id}: {post_count} filas tras transform")
-        log_sample(preds_batch, f"post-transform {epoch_id}", ["UUID", "prediction"])
-
-        context_batch = cleaned_batch.select(
-            "UUID",
-            col("payment_method").alias(context_cols["payment_method"]),
-            col("discounts_and_offers").alias(context_cols["discounts_and_offers"]),
-            col("order_date_and_time").alias(context_cols["order_date_and_time"]),
-        )
-
-        resultado_batch = (
-            preds_batch
-            .select("UUID", "prediction")
-            .join(context_batch, on="UUID", how="left")
-            .withColumn("@timestamp", current_timestamp())
-        )
-
-        write_to_mongo_kafka_es(resultado_batch, epoch_id)
-
-    except Exception as e:
-        print(f"❌ Error procesando microbatch {epoch_id}: {e}")
+        collection = mongo_client[MONGO_DB][MONGO_COLL]
+        # Compatible con el indice no unico creado por el flujo anterior.
+        # El replace con upsert ya evita duplicar cada UUID.
+        collection.create_index("UUID", unique=False, name="idx_uuid")
+        for document in documents:
+            collection.replace_one({"UUID": document["UUID"]}, document, upsert=True)
     finally:
-        try:
-            preds_batch is not None and preds_batch.unpersist()
-        except Exception:
-            pass
+        mongo_client.close()
+
+    bulk_lines = []
+    for document in documents:
+        document_id = document.get("UUID") or str(uuid4())
+        bulk_lines.append(json.dumps({"index": {"_index": ELASTIC_INDEX, "_id": document_id}}))
+        bulk_lines.append(json.dumps(document))
+    req = urllib.request.Request(
+        f"{ELASTIC_URL}/_bulk?refresh=true",
+        data=("\n".join(bulk_lines) + "\n").encode("utf-8"),
+        method="POST",
+    )
+    req.add_header("Content-Type", "application/x-ndjson")
+    with urllib.request.urlopen(req, timeout=30) as response:
+        result = json.loads(response.read().decode("utf-8"))
+    if result.get("errors"):
+        raise RuntimeError("Elasticsearch devolvió errores durante la escritura bulk")
+    print(f"[SINKS] Microbatch {epoch_id}: {len(documents)} predicciones persistidas")
 
 
-print("🚀 Iniciando streaming (Mongo + Kafka + Elasticsearch)...")
-checkpoint_dir = os.getenv("CHECKPOINT_DIR", "/models/checkpoints/prediction-v1")
-query = (
-    dedup_enriched.writeStream
-    .outputMode("append")
-    .option("checkpointLocation", checkpoint_dir)  # persistente en PVC si existe
-    .foreachBatch(process_batch)
-    .start()
-)
-print("🏃 Stream RUNNING en puerto 4042 (UI). ⏳ Esperando microbatches...")
-query.awaitTermination()
+def main() -> None:
+    if not os.path.isdir(MODEL_DIR):
+        raise FileNotFoundError(f"Modelo no encontrado en {MODEL_DIR}")
+
+    spark = (
+        SparkSession.builder.appName("Predict-Food-Delivery-Time-Streaming")
+        .master("spark://spark-master-svc:7077")
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("WARN")
+    model = PipelineModel.load(MODEL_DIR)
+    ensure_elasticsearch_index()
+
+    raw_stream = (
+        spark.readStream.format("kafka")
+        .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
+        .option("subscribe", REQUEST_TOPIC)
+        .option("startingOffsets", "latest")
+        .load()
+    )
+    parsed = (
+        raw_stream.selectExpr("CAST(value AS STRING) AS json_data")
+        .select(from_json("json_data", SCHEMA).alias("data"))
+        .select("data.*")
+        .withColumn("order_date_and_time", to_timestamp("order_date_and_time"))
+    )
+    normalized = (
+        parsed.withColumn("restaurant_latitude", sql_abs("restaurant_latitude"))
+        .withColumn("restaurant_longitude", sql_abs("restaurant_longitude"))
+        .withColumn("delivery_location_latitude", sql_abs("delivery_location_latitude"))
+        .withColumn("delivery_location_longitude", sql_abs("delivery_location_longitude"))
+    )
+    lat1 = radians(col("restaurant_latitude"))
+    lon1 = radians(col("restaurant_longitude"))
+    lat2 = radians(col("delivery_location_latitude"))
+    lon2 = radians(col("delivery_location_longitude"))
+    haversine_a = (
+        sin((lat2 - lat1) / 2) * sin((lat2 - lat1) / 2)
+        + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) * sin((lon2 - lon1) / 2)
+    )
+    enriched = (
+        normalized.withColumn("distance_km", lit(2 * 6371.0) * asin(sqrt(haversine_a)))
+        .withColumn("day_of_week", dayofweek("order_date_and_time").cast("double"))
+        .withColumn("hour_sin", sin(lit(2 * math.pi) * hour("order_date_and_time") / lit(24.0)))
+        .withColumn("hour_cos", cos(lit(2 * math.pi) * hour("order_date_and_time") / lit(24.0)))
+        .withWatermark("order_date_and_time", "1 hour")
+        .dropDuplicates(["UUID"])
+    )
+
+    output_columns = [
+        "UUID",
+        "prediction",
+        "order_date_and_time",
+        "distance_km",
+        "delivery_person_age",
+        "delivery_person_ratings",
+        "road_traffic_density",
+        "weather_conditions",
+        "vehicle_condition",
+        "type_of_order",
+        "type_of_vehicle",
+        "multiple_deliveries",
+        "festival",
+        "city",
+    ]
+
+    def process_batch(batch_df, epoch_id):
+        if batch_df.rdd.isEmpty():
+            return
+        predictions = model.transform(batch_df).select(*output_columns).withColumn(
+            "@ingest_ts", current_timestamp()
+        )
+        write_outputs(predictions, epoch_id)
+
+    query = (
+        enriched.writeStream.outputMode("append")
+        .foreachBatch(process_batch)
+        .option("checkpointLocation", CHECKPOINT_DIR)
+        .start()
+    )
+    print(
+        f"STREAMING_READY model=food-delivery-time-v2 topic={REQUEST_TOPIC} "
+        f"checkpoint={CHECKPOINT_DIR}"
+    )
+    query.awaitTermination()
+
+
+if __name__ == "__main__":
+    main()

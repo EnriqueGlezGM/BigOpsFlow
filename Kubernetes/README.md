@@ -1,100 +1,102 @@
-[![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat-square&logo=python&logoColor=white)](https://python.org/) [![Spark](https://img.shields.io/badge/Spark-4.0.1-orange?style=flat-square&logo=apachespark&logoColor=white)](https://spark.apache.org/) [![MongoDB](https://img.shields.io/badge/MongoDB-5.0.3-green?style=flat-square&logo=mongodb&logoColor=white)](https://mongodb.com/) [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-9.1.2-yellow?style=flat-square&logo=elasticsearch&logoColor=black)](https://elastic.co/) [![Kibana](https://img.shields.io/badge/Kibana-9.1.2-pink?style=flat-square&logo=kibana&logoColor=black)](https://elastic.co/) [![Kafka](https://img.shields.io/badge/Kafka-3.7.1-black?style=flat-square&logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-1.25+-blue?style=flat-square&logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+# BigOpsFlow en Kubernetes
 
-Ver `k8s-spark.yaml` para configuración de PersistentVolumes y namespace `spark`.
+[![Python](https://img.shields.io/badge/Python-3.13-blue?style=flat-square&logo=python&logoColor=white)](https://python.org/) [![Spark](https://img.shields.io/badge/Spark-4.0.1-orange?style=flat-square&logo=apachespark&logoColor=white)](https://spark.apache.org/) [![MongoDB](https://img.shields.io/badge/MongoDB-5.0.3-green?style=flat-square&logo=mongodb&logoColor=white)](https://mongodb.com/) [![Elasticsearch](https://img.shields.io/badge/Elasticsearch-9.1.2-yellow?style=flat-square&logo=elasticsearch&logoColor=black)](https://elastic.co/) [![Kafka](https://img.shields.io/badge/Kafka-3.7.1-black?style=flat-square&logo=apachekafka&logoColor=white)](https://kafka.apache.org/)
 
----
+Despliegue local en Kubernetes del modelo de tiempo de entrega. Conserva el flujo distribuido existente: un Job entrena con Spark, un proceso de Structured Streaming consume solicitudes de Kafka y publica las predicciones en Kafka, MongoDB y Elasticsearch. La FastAPI solo valida y transporta las peticiones; no ejecuta el modelo.
 
-## Docker Desktop
+## Datos y artefactos
 
-Este despliegue esta probado con Kubernetes de Docker Desktop. Segun la version
-o la configuracion, Docker Desktop puede indicar modo `kubeadm` o `kind`:
+El dataset se comparte fuera de `Compose` y `Kubernetes`:
 
-```bash
-docker desktop kubernetes status
+```text
+BigOpsFlow/
+├── data/food_delivery/train.csv
+├── Compose/
+└── Kubernetes/
 ```
 
-Usa `kubectl` para comprobar el stack. `docker ps` no siempre refleja los pods
-igual en todos los modos de Docker Desktop.
+El Job busca `../data/food_delivery/train.csv`. Si no existe, lo descarga desde `gauravmalik26/food-delivery-dataset` con `kagglehub` y lo deja en esa ruta compartida. El PV tiene política `Retain` y `delete-stack.sh` no borra este dataset.
 
-## Limpieza total
+El entrenamiento escribe:
 
-Si quieres borrar todo (namespace + PVs + datos locales):
+- modelo: `/models/food_delivery/pipeline_model`
+- metadatos y métricas: `/models/food_delivery/model_metadata.json`
+- checkpoint de streaming: `/models/checkpoints/prediction-v2`
+
+## Despliegue
+
+Requiere Docker Desktop con Kubernetes activo, `kubectl` y `envsubst`:
+
+```bash
+cd Kubernetes
+./apply-stack.sh
+```
+
+El script realiza el flujo completo:
+
+1. crea las carpetas persistentes;
+2. construye `spark:4.0.1-py` con las dependencias del modelo;
+3. aplica los manifiestos y crea los topics de Kafka;
+4. recrea y espera a que termine `spark-submit-train`;
+5. arranca la predicción en streaming con el modelo recién entrenado.
+
+Para omitir la construcción cuando la imagen ya existe:
+
+```bash
+BUILD_SPARK_IMAGE=false ./apply-stack.sh
+```
+
+Seguimiento del entrenamiento y del streaming:
+
+```bash
+kubectl -n spark logs job/spark-submit-train -f
+kubectl -n spark logs deployment/spark-stream-predict -c submit -f
+kubectl -n spark get pods
+```
+
+## Probar una predicción
+
+```bash
+curl -X POST 'http://localhost:30550/predict-sync' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "UUID": "test-k8s-1",
+    "delivery_person_age": 29,
+    "delivery_person_ratings": 4.7,
+    "restaurant_latitude": 12.9716,
+    "restaurant_longitude": 77.5946,
+    "delivery_location_latitude": 13.0150,
+    "delivery_location_longitude": 77.6200,
+    "order_date_and_time": "2026-09-12T13:30:00Z",
+    "weather_conditions": "Sunny",
+    "road_traffic_density": "Medium",
+    "vehicle_condition": 2,
+    "type_of_order": "Meal",
+    "type_of_vehicle": "motorcycle",
+    "multiple_deliveries": 1,
+    "festival": "No",
+    "city": "Metropolitian"
+  }'
+```
+
+`/predict-sync` crea primero el consumidor de respuestas, publica la solicitud y espera hasta 60 segundos. Devuelve HTTP 504 si el streaming no responde, en vez de mostrar una falsa predicción completada.
+
+## Servicios locales
+
+- formulario: `http://localhost:30060`
+- FastAPI (`/healthz`, `/ready`, `/predict`, `/predict-sync`): `http://localhost:30550`
+- Spark streaming UI: `http://localhost:30442`
+- Spark Master UI: `http://localhost:30080`
+- Mongo Express: `http://localhost:30881`
+- Kibana: `http://localhost:30601`
+- Elasticsearch: `http://localhost:30920`
+
+Los puertos son `NodePort`, por lo que no ocupan los puertos `5050` y `9200` usados por Compose.
+
+## Limpieza del despliegue
 
 ```bash
 ./delete-stack.sh
 ```
 
-Esto elimina el namespace `spark`, los PVs (`models-pv`, `mongo-pv`, `elastic-pv`) y limpia directorios locales:
-`models/gbt`, `models/checkpoints`, `data`, `models/jars`, `models/.ivy2*`, `models/.pylibs`.
-
-La carpeta `data` esta ignorada por git porque contiene datos locales de Mongo
-y Elasticsearch. `apply-stack.sh` recrea `data/mongo` y `data/elastic` antes de
-aplicar los manifiestos.
-
-## Despliegue
-
-```bash
-# 0) (Opcional) Build de imagen Spark personalizada
-docker build -t spark:4.0.1-py spark4-py
-
-# 1) Despliega el stack
-./apply-stack.sh
-```
-
-## Entrenamiento del modelo
-
-El job `spark-submit-train` entrena el modelo y guarda en `/models/gbt/pipeline_model`:
-
-```bash
-kubectl -n spark logs job/spark-submit-train -f
-```
-
-## Arrancar el streaming
-
-El streaming lee de Kafka, aplica el modelo y escribe a Kafka/Mongo/Elasticsearch.
-
-```bash
-kubectl -n spark rollout restart deploy/spark-stream-predict
-kubectl -n spark logs deploy/spark-stream-predict -c check-model --follow
-kubectl -n spark logs deploy/spark-stream-predict -c submit --follow
-```
-
-## Probar el ingest
-
-Sin port-forward. El servicio `predict-ingest` expone un LoadBalancer en `localhost:5050`.
-
-```bash
-curl -X POST 'http://localhost:5050/predict-sync' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "UUID":"test-10",
-    "customer_id":"c1",
-    "restaurant_id":"r1",
-    "order_date_and_time":"2024-05-10T12:34:00Z",
-    "order_value":25.5,
-    "delivery_fee":3.0,
-    "payment_method":"card",
-    "discounts_and_offers":null,
-    "commission_fee":2.0,
-    "payment_processing_fee":0.5,
-    "refunds/chargebacks":0.0
-  }'
-```
-
-`/predict-sync` espera la respuesta y devuelve la prediccion.
-
-## Web UI
-
-La web esta en `http://localhost:30060` y muestra la prediccion en grande.
-El boton se habilita cuando el job de streaming (analysis/predict) esta activo.
-
-## Endpoints utiles
-
-- Form web: `http://localhost:30060`
-- API ingest (`/healthz`, `/ready`, `/predict-sync`): `http://localhost:5050`
-- Spark streaming UI: `http://localhost:30442`
-- Spark Master UI: `http://localhost:30080`
-- Mongo Express: `http://localhost:30881`
-- Kibana: `http://localhost:30601`
-- Elasticsearch (ver puerto): `kubectl -n spark get svc elastic`
+El script elimina el namespace, los PV del despliegue y los artefactos locales de Kubernetes. Conserva `../data/food_delivery/train.csv` para que Compose y un futuro clúster reutilicen la misma fuente.

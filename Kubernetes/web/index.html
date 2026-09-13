@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Food Delivery Predict</title>
+  <title>Predicción de tiempo de entrega</title>
   <style>
     :root {
       --bg: #0b1021;
@@ -152,58 +152,28 @@
 </head>
 <body>
   <div class="card">
-    <h1>Food Delivery Predict</h1>
-    <p>Envía un evento a <code>http://localhost:5050/predict-sync</code> y recibe la predicción al vuelo. El UUID se genera automáticamente en cada envío.</p>
+    <h1>Predicción de tiempo de entrega</h1>
+    <p>Introduce las condiciones conocidas al registrar el pedido para estimar su duración.</p>
 
     <div class="layout">
       <div>
         <form id="predictForm">
           <div class="grid">
-            <div>
-              <label for="customer_id">customer_id</label>
-              <input id="customer_id" type="text" value="c1" required />
-            </div>
-            <div>
-              <label for="restaurant_id">restaurant_id</label>
-              <input id="restaurant_id" type="text" value="r1" required />
-            </div>
-            <div>
-              <label for="order_date_and_time">order_date_and_time</label>
-              <input id="order_date_and_time" type="datetime-local" value="2024-05-10T12:34" required />
-            </div>
-            <div>
-              <label for="order_value">order_value</label>
-              <input id="order_value" type="number" step="0.01" value="25.5" required />
-            </div>
-            <div>
-              <label for="delivery_fee">delivery_fee</label>
-              <input id="delivery_fee" type="number" step="0.01" value="3.0" required />
-            </div>
-            <div>
-              <label for="payment_method">payment_method</label>
-              <select id="payment_method">
-                <option value="card" selected>card</option>
-                <option value="cash">cash</option>
-                <option value="wallet">wallet</option>
-                <option value="">(empty)</option>
-              </select>
-            </div>
-            <div>
-              <label for="discounts_and_offers">discounts_and_offers</label>
-              <input id="discounts_and_offers" type="text" placeholder="e.g. SUMMER10" />
-            </div>
-            <div>
-              <label for="commission_fee">commission_fee</label>
-              <input id="commission_fee" type="number" step="0.01" value="2.0" required />
-            </div>
-            <div>
-              <label for="payment_processing_fee">payment_processing_fee</label>
-              <input id="payment_processing_fee" type="number" step="0.01" value="0.5" required />
-            </div>
-            <div>
-              <label for="refunds_chargebacks">refunds/chargebacks</label>
-              <input id="refunds_chargebacks" type="number" step="0.01" value="0.1" required />
-            </div>
+            <div><label for="delivery_person_age">Edad del repartidor</label><input id="delivery_person_age" type="number" value="30" min="18" max="70" required /></div>
+            <div><label for="delivery_person_ratings">Valoración del repartidor</label><input id="delivery_person_ratings" type="number" value="4.7" min="1" max="5" step="0.1" required /></div>
+            <div><label for="restaurant_latitude">Latitud del restaurante</label><input id="restaurant_latitude" type="number" value="22.651847" min="-90" max="90" step="any" required /></div>
+            <div><label for="restaurant_longitude">Longitud del restaurante</label><input id="restaurant_longitude" type="number" value="75.881991" min="-180" max="180" step="any" required /></div>
+            <div><label for="delivery_location_latitude">Latitud de entrega</label><input id="delivery_location_latitude" type="number" value="22.721847" min="-90" max="90" step="any" required /></div>
+            <div><label for="delivery_location_longitude">Longitud de entrega</label><input id="delivery_location_longitude" type="number" value="75.951991" min="-180" max="180" step="any" required /></div>
+            <div><label for="order_date_and_time">Fecha y hora del pedido</label><input id="order_date_and_time" type="datetime-local" required /></div>
+            <div><label for="weather_conditions">Meteorología</label><select id="weather_conditions" required><option>Sunny</option><option>Cloudy</option><option>Fog</option><option>Stormy</option><option>Sandstorms</option><option>Windy</option></select></div>
+            <div><label for="road_traffic_density">Densidad de tráfico</label><select id="road_traffic_density" required><option>Low</option><option selected>Medium</option><option>High</option><option>Jam</option></select></div>
+            <div><label for="vehicle_condition">Estado del vehículo</label><select id="vehicle_condition" required><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></div>
+            <div><label for="type_of_order">Tipo de pedido</label><select id="type_of_order" required><option>Snack</option><option>Drinks</option><option selected>Meal</option><option>Buffet</option></select></div>
+            <div><label for="type_of_vehicle">Tipo de vehículo</label><select id="type_of_vehicle" required><option selected>motorcycle</option><option>scooter</option><option>electric_scooter</option><option>bicycle</option></select></div>
+            <div><label for="multiple_deliveries">Entregas simultáneas</label><input id="multiple_deliveries" type="number" value="1" min="0" max="5" required /></div>
+            <div><label for="festival">Festival</label><select id="festival" required><option selected>No</option><option>Yes</option></select></div>
+            <div><label for="city">Tipo de ciudad</label><select id="city" required><option selected>Metropolitian</option><option>Urban</option><option>Semi-Urban</option></select></div>
           </div>
           <input id="UUID" type="hidden" />
 
@@ -233,9 +203,9 @@
     const predictBase = (() => {
       try {
         const url = new URL(window.location.href);
-        return `${url.protocol}//${url.hostname}:5050`;
+        return `${url.protocol}//${url.hostname}:30550`;
       } catch (e) {
-        return "http://localhost:5050";
+        return "http://localhost:30550";
       }
     })();
     const predictUrl = `${predictBase}/predict-sync`;
@@ -249,6 +219,10 @@
     const setUuid = () => { uuidInput.value = genUuid(); };
     setUuid();
 
+    const orderDateInput = document.getElementById("order_date_and_time");
+    const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+    orderDateInput.value = now.toISOString().slice(0, 16);
+
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       sendButton.disabled = true;
@@ -261,16 +235,21 @@
 
       const payload = {
         UUID: uuidInput.value || genUuid(),
-        customer_id: document.getElementById("customer_id").value || "",
-        restaurant_id: document.getElementById("restaurant_id").value || "",
+        delivery_person_age: Number(document.getElementById("delivery_person_age").value),
+        delivery_person_ratings: Number(document.getElementById("delivery_person_ratings").value),
+        restaurant_latitude: Number(document.getElementById("restaurant_latitude").value),
+        restaurant_longitude: Number(document.getElementById("restaurant_longitude").value),
+        delivery_location_latitude: Number(document.getElementById("delivery_location_latitude").value),
+        delivery_location_longitude: Number(document.getElementById("delivery_location_longitude").value),
         order_date_and_time: isoDate,
-        order_value: Number(document.getElementById("order_value").value) || 0,
-        delivery_fee: Number(document.getElementById("delivery_fee").value) || 0,
-        payment_method: document.getElementById("payment_method").value || null,
-        discounts_and_offers: document.getElementById("discounts_and_offers").value || null,
-        commission_fee: Number(document.getElementById("commission_fee").value) || 0,
-        payment_processing_fee: Number(document.getElementById("payment_processing_fee").value) || 0,
-        "refunds/chargebacks": Number(document.getElementById("refunds_chargebacks").value) || 0,
+        weather_conditions: document.getElementById("weather_conditions").value,
+        road_traffic_density: document.getElementById("road_traffic_density").value,
+        vehicle_condition: Number(document.getElementById("vehicle_condition").value),
+        type_of_order: document.getElementById("type_of_order").value,
+        type_of_vehicle: document.getElementById("type_of_vehicle").value,
+        multiple_deliveries: Number(document.getElementById("multiple_deliveries").value),
+        festival: document.getElementById("festival").value,
+        city: document.getElementById("city").value,
       };
 
       try {
@@ -279,10 +258,17 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.detail || `La API respondio con HTTP ${res.status}`);
+        }
         const pred = data?.prediction ?? data?.result?.prediction;
+        if (pred === undefined || pred === null) {
+          throw new Error("La respuesta no contiene una prediccion");
+        }
+        const numericPrediction = Number(pred);
         document.getElementById("predictionValue").textContent =
-          pred !== undefined ? pred : "--";
+          Number.isFinite(numericPrediction) ? `${numericPrediction.toFixed(2)} min` : String(pred);
         document.getElementById("uuidLabel").textContent = payload.UUID;
         document.getElementById("payloadBox").textContent = JSON.stringify(data, null, 2);
         setUuid(); // prepara la siguiente solicitud
@@ -304,7 +290,7 @@
         if (res.ok) {
           const data = await res.json();
           if (data.ok) {
-            statusBox.textContent = "Job analysis en ejecución. Puedes enviar.";
+            statusBox.textContent = "Streaming de predicción activo. Puedes enviar.";
             sendButton.disabled = false;
             return;
           }

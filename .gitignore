@@ -16,6 +16,10 @@ tmp
 kafka
 zeppelin
 models
+!Kubernetes/models/
+Kubernetes/models/*
+!Kubernetes/models/scripts/
+!Kubernetes/models/scripts/*.py
 .vagrant
 *.pem
 .reservation_id

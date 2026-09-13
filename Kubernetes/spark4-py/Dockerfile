@@ -15,6 +15,8 @@ RUN micromamba install -y -p ${MAMBA_ROOT_PREFIX} -c conda-forge \
     python=3.13 pyspark==4.0.1 pandas pyarrow \
  && micromamba clean -ay
 
+RUN ${MAMBA_ROOT_PREFIX}/bin/pip install --no-cache-dir kagglehub
+
 # Exporta rutas para PySpark
 ENV PATH=${MAMBA_ROOT_PREFIX}/bin:$PATH \
     PYSPARK_PYTHON=${MAMBA_ROOT_PREFIX}/bin/python \
