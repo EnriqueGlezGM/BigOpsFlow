@@ -34,7 +34,7 @@ services:
         volumes:
             - ./:/home/jovyan
             - ./scripts:/scripts
-            - ../data:/home/jovyan/shared_data:ro
+            - ../data:/home/jovyan/shared_data
         command: >
             bash -lc "source /scripts/start-spark-cluster.sh &&
                     start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"

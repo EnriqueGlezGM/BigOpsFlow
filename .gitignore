@@ -1,4 +1,7 @@
+# Metadatos de macOS en cualquier nivel del repositorio
 .DS_Store
+**/.DS_Store
+._*
 .ipynb_checkpoints
 mongodb
 spark

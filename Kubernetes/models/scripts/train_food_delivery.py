@@ -27,8 +27,7 @@ def resolve_dataset(path: Path) -> Path:
     if path.is_file():
         return path
 
-    cache_root = path.parent.parent / "kagglehub"
-    os.environ.setdefault("KAGGLEHUB_CACHE", str(cache_root))
+    os.environ.setdefault("KAGGLEHUB_CACHE", "/tmp/kagglehub")
     import kagglehub
 
     downloaded = Path(kagglehub.dataset_download(DATASET_SLUG)) / "train.csv"

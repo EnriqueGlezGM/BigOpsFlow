@@ -15,7 +15,7 @@ BigOpsFlow/
 └── Kubernetes/
 ```
 
-El Job busca `../data/food_delivery/train.csv`. Si no existe, lo descarga desde `gauravmalik26/food-delivery-dataset` con `kagglehub` y lo deja en esa ruta compartida. El PV tiene política `Retain` y `delete-stack.sh` no borra este dataset.
+El Job busca `../data/food_delivery/train.csv`. Si no existe, lo descarga temporalmente en `/tmp` desde `gauravmalik26/food-delivery-dataset` con `kagglehub` y copia únicamente `train.csv` a esa ruta compartida. El PV tiene política `Retain` y `delete-stack.sh` no borra este dataset.
 
 El entrenamiento escribe:
 
