@@ -83,13 +83,15 @@ curl -X POST 'http://localhost:30550/predict-sync' \
 
 ## Servicios locales
 
-- formulario: `http://localhost:30060`
 - FastAPI (`/healthz`, `/ready`, `/predict`, `/predict-sync`): `http://localhost:30550`
 - Spark streaming UI: `http://localhost:30442`
-- Spark Master UI: `http://localhost:30080`
-- Mongo Express: `http://localhost:30881`
-- Kibana: `http://localhost:30601`
 - Elasticsearch: `http://localhost:30920`
+
+- **[Formulario](http://localhost:30060)**
+- **[Spark Master UI](http://localhost:30080)**
+- **[Mongo Express](http://localhost:30881)**
+- **[Kibana](http://localhost:30601)**
+
 
 Los puertos son `NodePort`, por lo que no ocupan los puertos `5050` y `9200` usados por Compose.
 
